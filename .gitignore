@@ -1,0 +1,4 @@
+*.img
+*.o
+*.log
+kernel_img
