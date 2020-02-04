@@ -121,11 +121,100 @@ enable_paging:
     ret
 
 [BITS 64]
+%define SPBLOCK_BASE 0x100000
+
 long_mode_entry:
     mov ax, DATA_SEG
-    mov ds, ax       ;DS存放数据段描述符。
+    mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
+
+    push SPBLOCK_BASE
+    push 0x2
+    push 0x4
+    call read_hard_disk_pio ; load superblock
+    add rsp, 0x18
     jmp $
+
+
+; int64 lba,int64 count,int64 addr
+read_hard_disk_pio:
+    mov r8 , [rsp + 8]      ; lba number to start reading
+    mov rbx, [rsp + 16]     ; the number of sectors to be read
+
+    mov dx, 0x1f6
+    mov al, 0x40|(0<<4)
+    out dx, al       ; drive and some magic number 
+
+    mov dx, 0x1f2
+    mov al, bh
+    out dx, al      ; sectorcount high byte
+
+    mov dx, 0x1f3
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    shr rax, 24
+    out dx, al       ; bit 24-31
+
+    mov dx, 0x1f4
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    shr rax, 32
+    out dx, al       ; bit 32-39
+
+    mov dx, 0x1f5
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    shr rax, 40
+    out dx, al       ; bit 40-47
+
+    mov dx, 0x1f2
+    mov al, bl
+    out dx, al       ; sectorcount low byte
+
+    mov dx, 0x1f3
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    out dx, al       ; bit 0-7
+
+    mov dx, 0x1f4
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    shr rax, 8
+    out dx, al       ; bit 8-15
+
+    mov dx, 0x1f5
+    mov rax, 0xffffffffffffffff
+    and rax, r8
+    shr rax, 16
+    out dx, al       ; bit 16-23
+
+    mov dx, 0x1f7
+    mov al, 0x24
+    out dx, al       ; send command 
+
+.waits:
+    in al, dx
+    test al, 0x80  ; test BSY 
+    jne .waits
+    test al, 0x8   ; test DRQ
+    je .waits      ; wait unil avilable (BSY bit is clear)
+
+    mov rdi, [esp + 24]
+    mov dx, 0x1f0
+.loop_every_sector:
+    mov dx, 0x1f7
+    in al, dx
+    test al, 0x8   ; test DRQ
+    je .loop_every_sector       ; wait unil avilable (BSY bit is clear)
+    mov dx, 0x1f0
+
+    mov cx, 256
+    rep insw
+
+    dec rbx
+    cmp rbx, 0
+    jnz .loop_every_sector
+    ret
