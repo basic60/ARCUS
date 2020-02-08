@@ -41,6 +41,7 @@ int main(int argc, char** argv) {
         ctr->format(stat_info.st_size);
     } else if(strcmp(argv[2], "-r") == 0) {
         ctr->print_spblock();
+        ctr->ls_root();
     } else if(strcmp(argv[2], "-w") == 0) { // write the kernel to path "/"
         if (argc < 4) {
             std::cout<<"Please specify the file and path in order to write in the image."<<std::endl;

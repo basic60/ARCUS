@@ -17,8 +17,9 @@ namespace artools
 
     #define REGUALR_FILE 0x1
     #define DIRECTORY 0x2
-    
+
     struct inode {  // inode start at 1
+        uint64 bytes;
         uint64 tot_size;
         uint64 pt_direct[12];   // points to inode num;
         uint64 pt1;
@@ -33,7 +34,9 @@ namespace artools
         uint32 checksum;
         uint16 link_count;
         uint16 mode;
-        uint8 padding[84];
+        uint8 padding[76];
+
+        inode(uint32 t_uid, uint32 t_gid, uint16 md, uint32 ftp);
     };  //  total 256 bytes
 }
 #endif

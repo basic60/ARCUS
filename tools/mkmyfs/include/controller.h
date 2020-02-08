@@ -3,18 +3,21 @@
 #include"gpdes.h"
 #include"inode.h"
 #include"superblock.h"
-#include"block.h"
 #include"data_block.h"
+#include"dic_entry.h"
 #include<memory>
 #include<vector>
 #include<string>
 namespace artools
 {
-    #define SUPER_BLOCK_OFFSET 4096
     #define BLOCK_SIZE 4096
+    #define SUPER_BLOCK_OFFSET 4096
     #define DATA_BLOCKS_PER_GROUP 32768
-    #define SECTOR_SIZE 512
+    #define SECTOR_SIZE 512    
+
     #define BLOCK_GROUP_SIZE (BLOCK_SIZE * 2 + INODE_PER_GROUP * 256 + DATA_BLOCKS_PER_GROUP * BLOCK_SIZE)
+    #define ROOT_UID 1
+    #define ROOT_GID 1
     class controller {
     private:
         superblock* spblock_ptr;
@@ -52,13 +55,32 @@ namespace artools
          Get pointer through lba.
         *********************************************************************************************************/
         void* get_ptr_by_lba(long long lba);
-        
-        void set_inode_bitmap(long long inum, bool val);
-        void set_data_bitmap(long long dnum, bool val);
+
+        /*********************************************************************************************************
+         Add a directory entry.
+        *********************************************************************************************************/
+        void add_dir_entry(inode* ind, dic_entry* dentry);
+
+        /*********************************************************************************************************
+         Write data to inode.
+        *********************************************************************************************************/
+        void write_data(inode* ind, uint8* buf, uint64 len);
+
+        /*********************************************************************************************************
+         Append a datablock that inode pointes to. Return 0 if success else -1
+        *********************************************************************************************************/
+        int append_data_block(inode* ind, uint64 dnum);
+
+        /*********************************************************************************************************
+         Get data block ptr through offset.
+        *********************************************************************************************************/
+        void* get_file_data_ptr(inode* ind, uint64 block_idx);
+
+        int mk_root_dir();
     public:
         int format(long long size);
-        int mk_root_dir();
         void print_spblock();
+        void ls_root();
         controller(uint8* addr);
         controller() = delete;
         void write_into_kernel(uint8* kernel_addr, long long ksize);

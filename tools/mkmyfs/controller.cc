@@ -3,6 +3,7 @@
 #include<iostream>
 #include<sys/time.h>
 #include"dic_entry.h"
+#include"inode.h"
 using namespace std;
 using namespace artools;
 
@@ -17,26 +18,9 @@ int controller::mk_root_dir() {
     long long inum = allocate_inode();
     long long dnum = allocate_data_block();
     inode* iptr = get_indoe_ptr(inum);
-    data_block* d_ptr = get_data_block_ptr(dnum);
-
-    iptr->mode = USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC;
-    iptr->gid = 1;
-    iptr->uid = 1;
-    iptr->file_type = DIRECTORY;
-    iptr->link_count = 1;
-    iptr->tot_size += BLOCK_SIZE;
-    
-    struct timeval tp;
-    gettimeofday(&tp, NULL);
-    long long ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
-    iptr->atime = ms;
-    iptr->ctime = ms;
-    iptr->mtime = ms;
-
-    iptr->pt_direct[0] = dnum;
-    get_data_block_ptr(dnum)->clear();
-    dic_entry* root_entry = (dic_entry*)get_data_block_ptr(dnum);
-    root_entry[0] = dic_entry(".", inum);
+    new(iptr)inode(ROOT_UID, ROOT_GID, USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC, DIRECTORY);
+    dic_entry tmp_dir(".", inum);
+    add_dir_entry(iptr, &tmp_dir);
     return 0;
 }
 
@@ -99,7 +83,6 @@ long long controller::getlba(long long offset) {
 }
 
 void controller::print_spblock() {
-    spblock_ptr = (superblock*)(mm_addr + SUPER_BLOCK_OFFSET);
     if (spblock_ptr->signature != ARFS_SIG) {
         cout<<"Unknown signature: "<<spblock_ptr->signature<<endl;
         return;
@@ -113,6 +96,25 @@ void controller::print_spblock() {
     cout<<"Data blocks per group："<<spblock_ptr->data_blocks_per_group<<endl;
     cout<<"Inodes per group:"<<spblock_ptr->inodes_per_group<<endl;
     return;
+}
+
+void controller::ls_root() {
+    inode* ind = get_indoe_ptr(1);
+    if (ind->file_type != DIRECTORY) {
+        return;
+    }
+    cout<<endl<<"root dir indoe static:"<<endl;
+    cout<<"uid: "<<ind->uid<<"  gid: "<<ind->gid<<endl;
+    cout<<"bytes: "<<ind->bytes<<" tot:"<<ind->tot_size<<endl;
+
+    for (int j = 0; j < 12 ;j++) {
+        for (int i = 0; i < 8; i++) {
+            dic_entry& dic = ((dic_entry*)get_data_block_ptr(ind->pt_direct[j]))[i];
+            if (dic.inode_num != 0) {
+                cout<<dic.name<<" indoe:"<<dic.inode_num<<endl;
+            }
+        }   
+    }
 }
 
 void controller::write_into_kernel(uint8* kernel_addr, long long ksize) {
@@ -158,9 +160,9 @@ long long controller::allocate_inode() {
 }
 
 long long controller::allocate_data_block() {
-       for (int i = 0; i < this->spblock_ptr->block_group_count; i++) {
+    for (int i = 0; i < this->spblock_ptr->block_group_count; i++) {
         block_group_desc& desc = this->block_desc_ptr[i];
-        if (desc.free_data_block_count > 0) {
+        if (desc.free_data_block_count > 0) { 
             desc.free_data_block_count--;
             this->spblock_ptr->free_block_count--;
             block_bitmap* dbit = (block_bitmap*)get_ptr_by_lba(desc.data_bitmap_lba);
@@ -168,4 +170,104 @@ long long controller::allocate_data_block() {
         }
     }
     return 0; 
+}
+
+void controller::add_dir_entry(inode* di, dic_entry* dentry) {
+    if (di->file_type != DIRECTORY) {
+        return;
+    }
+
+    dic_entry* target_ptr;
+    // Allocate a new data block
+    if (di->bytes % BLOCK_SIZE == 0) {
+        uint64 dnum = allocate_data_block();
+        append_data_block(di, dnum);
+        target_ptr = (dic_entry*)get_data_block_ptr(dnum);
+    } else {
+        uint64 didx = di->bytes / BLOCK_SIZE;
+        uint64 doffset = di->bytes % BLOCK_SIZE;
+        target_ptr = (dic_entry*)((uint8*)get_file_data_ptr(di, didx) + doffset);
+    }
+
+    memcpy(target_ptr, dentry, sizeof(dic_entry));
+    di->bytes += sizeof(dic_entry);
+}
+
+void controller::write_data(inode* fi, uint8* buf, uint64 len) {
+    if (fi->file_type != REGUALR_FILE) {
+        return;
+    }
+
+
+}
+
+void* controller::get_file_data_ptr(inode* ind, uint64 didx) {
+    if (didx < 12) {
+        return get_data_block_ptr(ind->pt_direct[didx]);
+    } else if (didx < 12 + 512) {
+        return get_data_block_ptr(((uint64*)get_data_block_ptr(ind->pt1))[didx - 12]);
+    } else if (didx < 12 + 512 + 512 * 512) {
+        uint64 idx1 = ((uint64*)get_data_block_ptr(didx - 12 - 512))[(didx - 12 - 512) / 512];
+        return get_data_block_ptr(((uint64*)get_data_block_ptr(idx1))[didx - 12 - 512 - idx1 * 512]);
+    } else if (didx < 12 + 512 + 512 * 512 * 512) {
+        uint64 idx1 = ((uint64*)get_data_block_ptr(didx - 12 - 512 * 512))[(didx - 12 - 512 - 512 * 512) / (512 * 512)];
+        uint64 idx2 = ((uint64*)get_data_block_ptr(idx1))[(didx - 12 - 512 * 512 - idx1 * 512 * 512) / 512];
+        return get_data_block_ptr(((uint64*)get_data_block_ptr(idx2))[didx - 12 - 512 * 512 - idx1 * 512 * 512 - idx2 * 512]);
+    }
+    return nullptr;
+}
+
+int controller::append_data_block(inode* id, uint64 dnum) {
+    if ((id->tot_size + BLOCK_SIZE) / BLOCK_SIZE > 12 + 512 + 512 * 512 + 512 * 512 * 512) {
+        cerr<<"This file is too large!"<<endl;
+        return -1;
+    }
+
+    int bcount =  id->tot_size / BLOCK_SIZE;
+    if (bcount < 12) {
+        id->pt_direct[bcount] = dnum;
+    } else if (bcount < 12 + 512) {
+        if (id->pt1 == 0) {
+            id->pt1 = allocate_data_block();
+        }
+
+        uint64* val = (uint64*)get_data_block_ptr(id->pt1);
+        val[bcount - 12] = dnum;
+    } else if (bcount < 12 + 512 + 512 * 512) {
+        if (id->pt2 == 0) {
+            id->pt2 = allocate_data_block();
+        }
+        uint64* ptr1 = (uint64*)get_data_block_ptr(id->pt2);
+
+        int idx1 = (bcount - 12 - 512) / 512;
+        if (ptr1[idx1] == 0) {
+            ptr1[idx1] = allocate_data_block();
+        }
+
+        uint64* ptr2 = (uint64*)get_data_block_ptr(ptr1[idx1]);
+        ptr2[bcount - 12 - 512 - idx1 * 512] = dnum;
+    } else if (bcount < 12 + 512 + 512 * 512 + 512L * 512 * 512) {
+        if (id->pt3 == 0) {
+            id->pt3 = allocate_data_block();
+        }
+
+        uint64* ptr1 = (uint64*)get_data_block_ptr(id->pt3);
+
+        int idx1 = (bcount - 12 - 512 - 512 * 512) / (512 * 512);
+
+        if (ptr1[idx1] == 0) {
+            ptr1[idx1] = allocate_data_block();
+        }
+
+        uint64* ptr2 = (uint64*)get_data_block_ptr(ptr1[idx1]);
+        int idx2 = (bcount - 12 - 512 - 512 * 512 - idx1 * 512 * 512) / 512;
+        if (ptr2[idx2] == 0) {
+            ptr2[idx2] = allocate_data_block();
+        }
+
+        uint64* ptr3 = (uint64*)get_data_block_ptr(ptr2[idx2]);
+        ptr3[bcount - 12 - 512 - 512 * 512 - idx1 * 512 * 512 - idx2 * 512] = dnum;
+    }
+    id->tot_size += BLOCK_SIZE;
+    return 0;
 }

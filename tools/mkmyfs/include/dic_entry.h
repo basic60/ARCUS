@@ -4,9 +4,9 @@
 namespace artools
 {
     struct dic_entry {
-        uint32 name_len;
         char name[256];
         uint64 inode_num;
+        uint32 name_len;
         uint8 padding[244];
 
         dic_entry();
