@@ -2,6 +2,7 @@
 #include<string>
 #include<iostream>
 #include<sys/time.h>
+#include<vector>
 #include"dic_entry.h"
 #include"inode.h"
 using namespace std;
@@ -16,6 +17,7 @@ int controller::format(long long img_size) {
 
 int controller::mk_root_dir() {
     long long inum = allocate_inode();
+    cout<<"Root indoe is: "<<inum<<endl;
     long long dnum = allocate_data_block();
     inode* iptr = get_indoe_ptr(inum);
     new(iptr)inode(ROOT_UID, ROOT_GID, USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC, DIRECTORY);
@@ -93,7 +95,7 @@ void controller::print_spblock() {
     cout<<"Free Inode Count:"<<spblock_ptr->free_inode_count<<endl;
     cout<<"Free Block Count:"<<spblock_ptr->free_block_count<<endl;
     cout<<"Block Group Count:"<<spblock_ptr->block_group_count<<endl;
-    cout<<"Data blocks per group："<<spblock_ptr->data_blocks_per_group<<endl;
+    cout<<"Data blocks per group"<<spblock_ptr->data_blocks_per_group<<endl;
     cout<<"Inodes per group:"<<spblock_ptr->inodes_per_group<<endl;
     return;
 }
@@ -117,8 +119,37 @@ void controller::ls_root() {
     }
 }
 
-void controller::write_into_kernel(uint8* kernel_addr, long long ksize) {
+void controller::write_file(const char* fname, uint8* buff, uint64 len) {
+    uint64 finode = allocate_inode();
+    inode* find_ptr = get_indoe_ptr(finode);
+    new(find_ptr)inode(ROOT_UID, ROOT_GID, USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC, DIRECTORY);
+    
+    inode* dic_ind = get_indoe_ptr(1);
+    vector<dic_entry*> des = list_dic_entry(dic_ind);
+    for(auto i : des) {
+        if (!strcmp(i->name, fname)) {
+            cerr<<"same file!"<<endl;
+            return;
+        }
+    }
 
+    dic_entry dic_ent(fname, finode);
+    add_dir_entry(dic_ind, &dic_ent);
+
+    int dsize = (len + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    for (int i = 0; i < dsize; i++) {
+        append_data_block(find_ptr, allocate_data_block());
+    }
+
+    uint64 idx = 0;
+    for(int i = 0; i < dsize; i++) {
+        uint8* data = (uint8*)get_file_data_ptr(find_ptr, i);
+        int j = 0;
+        while (idx < len && j < BLOCK_SIZE) {
+            data[j++] = buff[idx];
+            idx++;
+        }
+    }
 }
 
 
@@ -166,7 +197,9 @@ long long controller::allocate_data_block() {
             desc.free_data_block_count--;
             this->spblock_ptr->free_block_count--;
             block_bitmap* dbit = (block_bitmap*)get_ptr_by_lba(desc.data_bitmap_lba);
-            return i * DATA_BLOCKS_PER_GROUP + dbit->poll() + 1;
+            uint64 dnum = i * DATA_BLOCKS_PER_GROUP + dbit->poll() + 1;
+            get_data_block_ptr(dnum)->clear();
+            return dnum;
         }
     }
     return 0; 
@@ -176,7 +209,7 @@ void controller::add_dir_entry(inode* di, dic_entry* dentry) {
     if (di->file_type != DIRECTORY) {
         return;
     }
-
+ 
     dic_entry* target_ptr;
     // Allocate a new data block
     if (di->bytes % BLOCK_SIZE == 0) {
@@ -270,4 +303,91 @@ int controller::append_data_block(inode* id, uint64 dnum) {
     }
     id->tot_size += BLOCK_SIZE;
     return 0;
+}
+
+vector<dic_entry*> controller::list_dic_entry(inode* ind) {
+    vector<dic_entry*> ret;
+    if (ind->file_type != DIRECTORY) {
+        return ret;
+    }
+
+    bool finish = false;
+    for(int i = 0; i < 12; i++) {
+        if (ind->pt_direct[i] == 0) {
+            return ret;
+        }
+        dic_entry* dptr = (dic_entry*)get_data_block_ptr(ind->pt_direct[i]);
+        for(int j = 0; j < BLOCK_SIZE / sizeof(dic_entry); j++) {
+            if (!dptr[j].inode_num) {
+                return ret;
+            }
+            ret.push_back(&dptr[j]);
+        }
+
+        uint64* p1 = (uint64*)get_data_block_ptr(ind->pt1);
+        for(int i = 0; i < BLOCK_SIZE / sizeof(uint64); i++) {
+            if (p1[i] == 0) {
+                return ret;
+            }
+
+            dic_entry* dptr = (dic_entry*)get_data_block_ptr(p1[i]);
+            for(int j = 0; j < BLOCK_SIZE / sizeof(dic_entry); j++) {
+                if (!dptr[j].inode_num) {
+                    return ret;
+                }
+                ret.push_back(&dptr[j]);
+            }
+        }
+
+        p1 = (uint64*)get_data_block_ptr(ind->pt2);
+        for(int i = 0; i < BLOCK_SIZE / sizeof(uint64); i++) {
+            if (p1[i] == 0) {
+                return ret;
+            }
+            for(int j = 0; j < BLOCK_SIZE / sizeof(uint64); j++) {
+                uint64* p2 = (uint64*)get_data_block_ptr(p1[i]);
+                if (p2[j] == 0) {
+                    return ret;
+                }
+
+                dic_entry* dptr = (dic_entry*)get_data_block_ptr(p2[j]);
+                for(int k = 0; k < BLOCK_SIZE / sizeof(dic_entry); k++) {
+                    if (!dptr[k].inode_num) {
+                        return ret;
+                    }
+                    ret.push_back(&dptr[k]);
+                }
+
+            }
+        }
+
+        p1 = (uint64*)get_data_block_ptr(ind->pt3);
+        for(int i = 0; i < BLOCK_SIZE / sizeof(uint64); i++) {
+            if (p1[i] == 0) {
+                return ret;
+            }
+            for(int j = 0; j < BLOCK_SIZE / sizeof(uint64); j++) {
+                uint64* p2 = (uint64*)get_data_block_ptr(p1[i]);
+                if (p2[j] == 0) {
+                    return ret;
+                }
+
+                for(int k = 0; k < BLOCK_SIZE / sizeof(uint64); k++) {
+                    uint64* p3 = (uint64*)get_data_block_ptr(p2[j]);
+                    if (p3[k] == 0) {
+                        return ret;
+                    }
+
+                    dic_entry* dptr = (dic_entry*)get_data_block_ptr(p3[k]);
+                    for(int l = 0; l < BLOCK_SIZE / sizeof(dic_entry); l++) {
+                        if (!dptr[l].inode_num) {
+                            return ret;
+                        }
+                        ret.push_back(&dptr[l]);
+                    }
+                }
+            }
+        }
+
+    }
 }

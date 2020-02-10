@@ -18,6 +18,7 @@ void block_bitmap::set_index(int index, bool value) {
 
     uint8 cell = bits[index / 8];
     cell |=  1 << (index % 8);
+    bits[index / 8] = cell;
 }
 
 int block_bitmap::poll() {

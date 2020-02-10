@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
             exit(-1);
         }
 
-        ctr->write_into_kernel((uint8*)addr_kernel, stat_info_img.st_size);
+        ctr->write_file(fname, (uint8*)addr_kernel, stat_info_img.st_size);
         close(fdk);
     }
 

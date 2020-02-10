@@ -61,6 +61,8 @@ namespace artools
         *********************************************************************************************************/
         void add_dir_entry(inode* ind, dic_entry* dentry);
 
+        std::vector<dic_entry*> list_dic_entry(inode* ind);
+
         /*********************************************************************************************************
          Write data to inode.
         *********************************************************************************************************/
@@ -83,7 +85,7 @@ namespace artools
         void ls_root();
         controller(uint8* addr);
         controller() = delete;
-        void write_into_kernel(uint8* kernel_addr, long long ksize);
+        void write_file(const char* fname, uint8* buff, uint64 len);
     };
 }
 #endif
