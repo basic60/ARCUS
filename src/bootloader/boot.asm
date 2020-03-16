@@ -4,14 +4,15 @@ mov si, 0
 mov ax, cs
 mov ds, ax
 mov es, ax           
-mov esp, 7b000h
+mov esp, 7c00h
+
 jmp load_stage2
 
 disk_rw_struct:
     db 16  ; size of disk_rw_struct, 10h
     db 0   ; reversed, must be 0
     dw 0   ; number of sectors
-    dd 0   ; target addrr=ess
+    dd 0   ; target address
     dq 0   ; start LBA number
 
 read_disk_by_int13h:
@@ -38,9 +39,9 @@ load_stage2:
 times 510-($-$$) db 0
 dw 0xaa55
 
-%define PAGE_TABLE 0x7b000
+%define PAGE_TABLE 0x40000
 %define CODE_SEG   0x0008
-%define DATA_SEG    0x0010
+%define DATA_SEG   0x0010
 
 gdt64:
 .Null:
@@ -56,16 +57,18 @@ enter_long_mode:
     call fill_page_table
     call enable_paging
     lgdt [gdt64.pointer]
+
     jmp CODE_SEG:long_mode_entry
     jmp $
+    
 
 fill_page_table:
-    mov edi, PAGE_TABLE   ; page talbe start at 0x7b000, occupy 20KB memroy and map the first 4MB
+    mov edi, PAGE_TABLE   ; page talbe start at 0x40000, occupy 20KB memroy and map the first 26MB
     push edi
-    mov ecx, 0x1400
+    mov ecx, 0x10000
     xor eax, eax
     cld
-    rep stosd          ; zero out 20KB memory
+    rep stosd          ; zero out 64KB memory
     pop edi
 
     lea eax, [es:edi + 0x1000]     
@@ -76,13 +79,19 @@ fill_page_table:
 	or eax, 3 
     mov [es:edi + 0x1000], eax
 
-    lea eax, [es:edi + 0x3000]        
-	or eax, 3
-    mov [es:edi + 0x2000], eax
-    
-    lea eax, [es:edi + 0x4000]        
-	or eax, 3
-    mov [es:edi + 0x2008], eax
+    mov ebx, 0x3000
+    mov edx, 0x2000
+    mov ecx, 52
+    .loop_p4:
+        lea eax, [es:edi + ebx]        
+        or eax, 3
+        mov [es:edi + edx], eax
+
+        add ebx, 0x1000
+        add edx, 8
+        dec ecx
+        cmp ecx, 0
+        jne .loop_p4
 
     push edi               
     lea edi, [es:edi + 0x3000]
@@ -91,7 +100,7 @@ fill_page_table:
         mov [es:edi], eax
         add eax, 0x1000
         add edi, 8
-        cmp eax, 0x400000       
+        cmp eax, 0x1a00000       
         jb .loop_page_table
     pop edi
 
@@ -121,8 +130,6 @@ enable_paging:
     ret
 
 [BITS 64]
-%define SPBLOCK_BASE 0x100000
-
 long_mode_entry:
     mov ax, DATA_SEG
     mov ds, ax
@@ -131,90 +138,14 @@ long_mode_entry:
     mov gs, ax
     mov ss, ax
 
-    push SPBLOCK_BASE
-    push 0x2
-    push 0x4
-    call read_hard_disk_pio ; load superblock
-    add rsp, 0x18
+    call cli_clear
+    jmp 0x8000
     jmp $
 
-
-; int64 lba,int64 count,int64 addr
-read_hard_disk_pio:
-    mov r8 , [rsp + 8]      ; lba number to start reading
-    mov rbx, [rsp + 16]     ; the number of sectors to be read
-
-    mov dx, 0x1f6
-    mov al, 0x40|(0<<4)
-    out dx, al       ; drive and some magic number 
-
-    mov dx, 0x1f2
-    mov al, bh
-    out dx, al      ; sectorcount high byte
-
-    mov dx, 0x1f3
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    shr rax, 24
-    out dx, al       ; bit 24-31
-
-    mov dx, 0x1f4
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    shr rax, 32
-    out dx, al       ; bit 32-39
-
-    mov dx, 0x1f5
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    shr rax, 40
-    out dx, al       ; bit 40-47
-
-    mov dx, 0x1f2
-    mov al, bl
-    out dx, al       ; sectorcount low byte
-
-    mov dx, 0x1f3
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    out dx, al       ; bit 0-7
-
-    mov dx, 0x1f4
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    shr rax, 8
-    out dx, al       ; bit 8-15
-
-    mov dx, 0x1f5
-    mov rax, 0xffffffffffffffff
-    and rax, r8
-    shr rax, 16
-    out dx, al       ; bit 16-23
-
-    mov dx, 0x1f7
-    mov al, 0x24
-    out dx, al       ; send command 
-
-.waits:
-    in al, dx
-    test al, 0x80  ; test BSY 
-    jne .waits
-    test al, 0x8   ; test DRQ
-    je .waits      ; wait unil avilable (BSY bit is clear)
-
-    mov rdi, [esp + 24]
-    mov dx, 0x1f0
-.loop_every_sector:
-    mov dx, 0x1f7
-    in al, dx
-    test al, 0x8   ; test DRQ
-    je .loop_every_sector       ; wait unil avilable (BSY bit is clear)
-    mov dx, 0x1f0
-
-    mov cx, 256
-    rep insw
-
-    dec rbx
-    cmp rbx, 0
-    jnz .loop_every_sector
+cli_clear:
+    mov edi,0xB8000
+    mov ecx,500
+    mov eax,0x0030       ; Set the value to set the screen to: Blue background, white foreground, blank spaces.
+    rep stosq
+    mov edi, 0xb8000         
     ret
