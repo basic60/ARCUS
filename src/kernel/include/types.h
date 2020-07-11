@@ -10,5 +10,10 @@ namespace arcus
     typedef int int32;
     typedef unsigned long long uint64;
     typedef long long int64;
+    typedef unsigned long long size_t;
+
+    typedef struct atmoic_t {
+        int counter;
+    };
 }
 #endif

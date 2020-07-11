@@ -106,13 +106,12 @@ void load_elf_kernel(uint8* kaddr) {
     ld_print("Start load ELF Kernel. Section count: %d. Program entry: %l\n", ehead->e_shnum, ehead->e_entry);
     struct elf_shdr* shdr_ptr = (struct elf_shdr*)(ehead->e_shoff + tmp);
     for (int i = 0; i < ehead->e_shnum; i++) {
-        ld_print("%d %d\n", shdr_ptr[i].sh_addr, shdr_ptr[i].sh_offset);
         uint8* target = (uint8*)shdr_ptr[i].sh_addr;
         uint8* src = tmp + shdr_ptr[i].sh_offset;
         for (int k = 0; k < shdr_ptr[i].sh_size; k++) {
             target[k] = src[k];
         }
-    } 
+    }
     jump_to_kernel(ehead->e_entry);
     asm("hlt");    
 }

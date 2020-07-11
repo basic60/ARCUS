@@ -2,7 +2,8 @@
 #include<sys/mman.h>
 #include<fcntl.h>
 #include<unistd.h>
-#include <sys/stat.h>
+#include<sys/stat.h>
+#include<string>
 #include"controller.h"
 using namespace artools;
 
@@ -65,7 +66,9 @@ int main(int argc, char** argv) {
             exit(-1);
         }
 
-        ctr->write_file(fname, (uint8*)addr_kernel, stat_info_img.st_size);
+        std::string path(fname);
+        path = path.substr(path.find_last_of("/\\") + 1);
+        ctr->write_file(path.c_str(), (uint8*)addr_kernel, stat_info_img.st_size);
         close(fdk);
     }
 

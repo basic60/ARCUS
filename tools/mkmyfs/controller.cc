@@ -97,6 +97,8 @@ void controller::print_spblock() {
     cout<<"Block Group Count:"<<spblock_ptr->block_group_count<<endl;
     cout<<"Data blocks per group"<<spblock_ptr->data_blocks_per_group<<endl;
     cout<<"Inodes per group:"<<spblock_ptr->inodes_per_group<<endl;
+    cout<<"==============block group 0================="<<endl;
+    cout<<"db0 lba:"<<block_desc_ptr->data_block_lba<<endl;
     return;
 }
 
@@ -110,10 +112,12 @@ void controller::ls_root() {
     cout<<"bytes: "<<ind->bytes<<" tot:"<<ind->tot_size<<endl;
 
     for (int j = 0; j < 12 ;j++) {
+        cout<<"root dir datablock num:"<<ind->pt_direct[j]<<endl;
         for (int i = 0; i < 8; i++) {
             dic_entry& dic = ((dic_entry*)get_data_block_ptr(ind->pt_direct[j]))[i];
             if (dic.inode_num != 0) {
-                cout<<dic.name<<" indoe:"<<dic.inode_num<<endl;
+                cout<<dic.name<<" indoe:"<<dic.inode_num<<" size:"<<get_indoe_ptr(dic.inode_num)->bytes
+                <<"  data block0:"<<get_indoe_ptr(dic.inode_num)->pt_direct[0]<<endl;
             }
         }   
     }
@@ -122,7 +126,8 @@ void controller::ls_root() {
 void controller::write_file(const char* fname, uint8* buff, uint64 len) {
     uint64 finode = allocate_inode();
     inode* find_ptr = get_indoe_ptr(finode);
-    new(find_ptr)inode(ROOT_UID, ROOT_GID, USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC, DIRECTORY);
+    new(find_ptr)inode(ROOT_UID, ROOT_GID, USER_EXEC | USER_READ | USER_WRITE | GROUP_READ | GROUP_EXEC | OTHER_READ | OTHER_EXEC, REGUALR_FILE);
+    find_ptr->bytes = len;
     
     inode* dic_ind = get_indoe_ptr(1);
     vector<dic_entry*> des = list_dic_entry(dic_ind);
@@ -137,6 +142,7 @@ void controller::write_file(const char* fname, uint8* buff, uint64 len) {
     add_dir_entry(dic_ind, &dic_ent);
 
     int dsize = (len + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    cout<<"File len: "<<len<<" Data Blocks Count:"<<dsize<<endl;
     for (int i = 0; i < dsize; i++) {
         append_data_block(find_ptr, allocate_data_block());
     }
@@ -224,14 +230,6 @@ void controller::add_dir_entry(inode* di, dic_entry* dentry) {
 
     memcpy(target_ptr, dentry, sizeof(dic_entry));
     di->bytes += sizeof(dic_entry);
-}
-
-void controller::write_data(inode* fi, uint8* buf, uint64 len) {
-    if (fi->file_type != REGUALR_FILE) {
-        return;
-    }
-
-
 }
 
 void* controller::get_file_data_ptr(inode* ind, uint64 didx) {
@@ -388,6 +386,6 @@ vector<dic_entry*> controller::list_dic_entry(inode* ind) {
                 }
             }
         }
-
     }
+    return ret;
 }

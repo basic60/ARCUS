@@ -100,9 +100,4 @@ ld_read_disk:
 
     mov rsp, rbp
     pop rbp
-
-    ; pop r8
-    ; pop rcx
-    ; pop rbx
-    ; pop rax
     ret

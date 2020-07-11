@@ -17,5 +17,5 @@ struct elf_head {
     uint16 e_shentsize;
     uint16 e_shnum;
     uint16 e_shstrndx;
-} ;
+};
 #endif

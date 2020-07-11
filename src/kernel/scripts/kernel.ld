@@ -1,15 +1,30 @@
 ENTRY(_start)
 SECTIONS
 {
-	.text 0x100000 : 
+	.init 0x100000:
+	{
+		PROVIDE(__INIT_BEGIN = .);
+		*(.init)
+		*(.init*)
+		. = ALIGN(4096);
+		PROVIDE(__INIT_END = .);
+	}
+
+	.text : 
 	{
 		*(.text)
 		. = ALIGN(4096);
 	}
 
+	.rodata : 
+	{
+		*(.rodata)
+		. = ALIGN(4096);
+	}
+
 	.data : 
 	{
-		*(.text)
+		*(.data)
 		. = ALIGN(4096);
 	}
 
@@ -18,4 +33,6 @@ SECTIONS
 		*(.bss)
 		. = ALIGN(4096);
 	}
+
+	PROVIDE(__KERNEL_END__ = .);
 }

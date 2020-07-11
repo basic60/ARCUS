@@ -31,7 +31,7 @@ build_kernel:
 
 .PHONY: qemu
 qemu:
-	qemu-system-x86_64 -hda $(DISK)
+	qemu-system-x86_64 -smp 8 -m 8G -hda $(DISK)
 
 .PHONY: clean
 clean:

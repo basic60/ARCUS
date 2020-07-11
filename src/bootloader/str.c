@@ -18,7 +18,3 @@ int ld_strcmp(const char* src, const char* dst) {
     }
     return 0;
 }
-
-void ld_memcpy(char* dst, char* src, int len) {
-    
-}

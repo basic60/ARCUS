@@ -39,6 +39,7 @@ load_stage2:
 times 510-($-$$) db 0
 dw 0xaa55
 
+%define E820_BUFFER 0xc000
 %define PAGE_TABLE 0x40000
 %define CODE_SEG   0x0008
 %define DATA_SEG   0x0010
@@ -48,19 +49,63 @@ gdt64:
     dq 0                              ; Null Descriptor - should be present.
 .Code:
     dq 0x00209A0000000000             ; 64-bit code descriptor (exec/read).
-    dq 0x0000920000000000             ; 64-bit data descriptor (read/write).
 .pointer:
     dw $ - gdt64 - 1                    ; 16-bit Size (Limit) of GDT.
     dd gdt64
 
 enter_long_mode:
+    call memory_detect
     call fill_page_table
     call enable_paging
     lgdt [gdt64.pointer]
 
     jmp CODE_SEG:long_mode_entry
-    jmp $
     
+mmap_entry_count equ E820_BUFFER
+memory_detect:
+    mov edi, 0xc004
+    xor ebx, ebx		
+	xor bp, bp		
+	mov edx, 0x0534D4150
+	mov eax, 0xe820
+	mov [es:edi + 20], dword 1	
+	mov ecx, 24
+	int 0x15
+    jc .failed
+    mov edx, 0x0534D4150
+	cmp eax, edx
+	jne short .failed
+	test ebx, ebx
+	je .failed
+	jmp .jmpin
+    .e820_loop:
+	    mov eax, 0xe820		; eax, ecx get trashed on every int 0x15 call
+	    mov [es:edi + 20], dword 1	; force a valid ACPI 3.X entry
+	    mov ecx, 24		; ask for 24 bytes again
+	    int 0x15
+	    jc short .detect_finish		; carry set means "end of list already reached"
+	    mov edx, 0x0534D4150	; repair potentially trashed register
+    .jmpin:
+        jcxz .skip_entry		; skip any 0 length entries
+        cmp cl, 20		; got a 24 byte ACPI 3.X response?
+        jbe .add_idx
+        test byte [es:edi + 20], 1	; if so: is the "ignore this data" bit clear?
+        je .skip_entry
+    .add_idx:
+        mov ecx, dword [es:edi + 8]	; get lower uint32_t of memory region length
+        or ecx, dword [es:edi + 12]	; "or" it with upper uint32_t to test for zero
+        jz .skip_entry		; if length uint64_t is 0, skip entry
+        inc bp			; got a good entry: ++count, move to next storage spot
+        add edi, 24
+    .skip_entry:
+        test ebx, ebx		; if ebx resets to 0, list is complete
+        jne .e820_loop
+    .detect_finish:
+        mov [mmap_entry_count], bp
+        clc
+        ret
+    .failed:
+        hlt
 
 fill_page_table:
     mov edi, PAGE_TABLE   ; page talbe start at 0x40000, occupy 20KB memroy and map the first 26MB
@@ -131,16 +176,8 @@ enable_paging:
 
 [BITS 64]
 long_mode_entry:
-    mov ax, DATA_SEG
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-
     call cli_clear
     jmp 0x8000
-    jmp $
 
 cli_clear:
     mov edi,0xB8000

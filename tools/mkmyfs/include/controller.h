@@ -11,7 +11,7 @@
 namespace artools
 {
     #define BLOCK_SIZE 4096
-    #define SUPER_BLOCK_OFFSET 4096
+    #define SUPER_BLOCK_OFFSET 65536
     #define DATA_BLOCKS_PER_GROUP 32768
     #define SECTOR_SIZE 512    
 
@@ -62,11 +62,6 @@ namespace artools
         void add_dir_entry(inode* ind, dic_entry* dentry);
 
         std::vector<dic_entry*> list_dic_entry(inode* ind);
-
-        /*********************************************************************************************************
-         Write data to inode.
-        *********************************************************************************************************/
-        void write_data(inode* ind, uint8* buf, uint64 len);
 
         /*********************************************************************************************************
          Append a datablock that inode pointes to. Return 0 if success else -1

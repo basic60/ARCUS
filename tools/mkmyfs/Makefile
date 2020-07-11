@@ -10,7 +10,6 @@ ifneq ($(DISK), $(wildcard $(DISK)))
 endif
 
 %.o:%.cc
-	@echo [Compile] Compiling C++ file
 	$(CC) -std=c++17 -fno-strict-aliasing -g -c -m64 -I ./include -o $@ $<
 
 link: $(CPP_OBJ)
