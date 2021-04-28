@@ -1,54 +1,43 @@
 #include"mem/mem_block.h"
 #include"printk.h"
 
-extern int __KERNEL_END__; // 内核结束地址为   &__KERNEL_END__ 
+extern int __KERNEL_END__; // 内核结束地址为&__KERNEL_END__，定义于kernel.ld
 
 namespace arcus::memory
 {
-    struct memory_end {
+    struct e820_end {
         e820_entry* ent_ptr;
 
         uint64 addr;
     };
 
-    static e820_entry entries[MAX_E820_ENTRY] __initdata;
     static e820_entry new_entries[MAX_E820_ENTRY] __initdata;
+    static e820_entry free_entries[MAX_E820_ENTRY] __initdata;
     static int sanitized_entries_cnt __initdata;
+    static int free_entries_cnt __initdata;
     static e820_entry* overlap_list[MAX_E820_ENTRY] __initdata;
-    static memory_end end_points[MAX_E820_ENTRY * 2] __initdata;
-    static mem_block mblock __initdata;
+    static e820_end end_points[MAX_E820_ENTRY * 2] __initdata;
     static mem_region free_region[MAX_E820_ENTRY] __initdata;
-    static mem_region reserved_region[MAX_E820_ENTRY] __initdata;
+    static uint64 memory_bound;
     
 
-    static void sort_end_points(memory_end* ptr, int cnt) __init;
+    static void sort_end_points(e820_end* ptr, int cnt) __init;
     static void sanitize_e820_entries() __init;
  
     int init_memblock() {
         sanitize_e820_entries();
 
-        mblock.free.cnt = mblock.reserved.cnt = 0;
-        mblock.free.max = mblock.reserved.max = MAX_E820_ENTRY;
-        mblock.free.reg = free_region;
-        mblock.reserved.reg = reserved_region;
         uint64 kend = (uint64)(&__KERNEL_END__);
-        // 内存地址低于kend直接标记为不可用。
+        free_entries_cnt = 0;
         for (int i = 0; i < sanitized_entries_cnt; i++) {
-            if (new_entries[i].type == E820_TYPE_RAM) {
-                if (new_entries[i].base + new_entries[i].limit <= kend) {
-                    mblock.reserved.add_region(new_entries[i].base, new_entries[i].limit);
-                } else if (new_entries[i].base < kend && new_entries[i].base + new_entries[i].limit > kend) {
-                    mblock.reserved.add_region(new_entries[i].base, kend - new_entries[i].base);
-                    mblock.free.add_region(kend, new_entries[i].base + new_entries[i].limit - kend);
-                } else {
-                    mblock.free.add_region(new_entries[i].base, new_entries[i].limit);
-                }
-            } else {
-                mblock.reserved.add_region(new_entries[i].base, new_entries[i].limit);
-            }
+            if (new_entries[i].type != E820_TYPE_RAM || new_entries[i].base + new_entries[i].limit < kend) continue;
+            free_entries[free_entries_cnt].base = new_entries[i].base < kend ? kend : new_entries[i].base;
+            free_entries[free_entries_cnt++].limit = new_entries[i].base < kend ? new_entries[i].limit - kend + new_entries[i].base : new_entries[i].limit;
         }
+        memory_bound = free_entries[free_entries_cnt - 1].base + free_entries[free_entries_cnt - 1].limit;
     }
 
+    // 整理e820表项
     static void sanitize_e820_entries() {
         int entry_cnt = *((int*)E820_CNT_PTR);
         e820_entry* e820_entry_ptr = (e820_entry*)E820_BASE;
@@ -109,14 +98,14 @@ namespace arcus::memory
         sanitized_entries_cnt = new_entry_cnt;
     }
 
-    static void sort_end_points(memory_end* ptr, int cnt) {
+    static void sort_end_points(e820_end* ptr, int cnt) {
         for (int i = 0; i < cnt - 1; i++) {
             for (int j = i + 1; j < cnt; j++) {
                 if (ptr[i].addr > ptr[j].addr 
                     || ptr[i].addr == ptr[j].addr
                     && ptr[i].ent_ptr->base + ptr[i].ent_ptr->limit 
                         > ptr[j].ent_ptr->base + ptr[j].ent_ptr->limit) {
-                    memory_end tmp_ent;
+                    e820_end tmp_ent;
                     tmp_ent = ptr[i];
                     ptr[i] = ptr[j];
                     ptr[j] = tmp_ent;
@@ -125,75 +114,19 @@ namespace arcus::memory
         }
     }
 
-    void mem_type::add_region(uint64 base, uint64 size) {
-        if (this->cnt >= this->max - 5) {
-            this->max *= 2;
-            mem_region* new_array = (mem_region*)mblock_allocate(sizeof(struct mem_region) * this->max);
-            for (int i = 0 ;i < cnt; i++) {
-                new_array[i] = this->reg[i];
-            }
-
-            if (this->max / 2 > MAX_E820_ENTRY) mblock_free(this->reg);
-            
-            this->reg = new_array;
-        }
-        this->reg[this->cnt].base = base;
-        this->reg[this->cnt++].size = size;
-    }
-
-    void mem_type::remove_region(int rmcnt) {
-        if (rmcnt > this->max || rmcnt >= cnt) {
-            return;
-        }        
-        this->reg[rmcnt] = this->reg[this->cnt - 1];
-        this->cnt--;
-    }
-
-    void mem_type::merge_region() {
-        for (int i = 0; i < this->cnt; i++) {
-            for (int j = i + 1; j < this->cnt; j++) {
-                if (this->reg[i].base + this->reg[i].size == this->reg[j].base) {
-                    this->reg[i].size += this->reg[j].size;
-                    this->remove_region(j);
-                } else if (this->reg[j].base + this->reg[j].size == this->reg[i].base) {
-                    this->reg[j].size += this->reg[i].size;
-                    this->remove_region(i);
-                }
-            }
-        }
-    }
-
+    // 分配内存，内核初始化阶段临时使用。
     void* mblock_allocate(uint64 len, uint64 aligned) {
-        uint64 ret = 0;
-        uint64 padding = 0;
-        uint64 kend = (uint64)&__KERNEL_END__;
-        for (int i = 0 ; i < mblock.free.cnt; i++) {
-            if (aligned > 0 && mblock.free.reg[i].base % aligned != 0) {
-                len += (padding = aligned - mblock.free.reg[i].base % aligned);
-            }
-
-            if (mblock.free.reg[i].size >= len && mblock.free.reg[i].base + len <= INIT_MEM_CEILING) {
-                mblock.reserved.add_region(mblock.free.reg[i].base, len);
-                ret = mblock.free.reg[i].base + padding;
-                if (len < mblock.free.reg[i].size) {
-                    mblock.free.add_region(mblock.free.reg[i].base + len, mblock.free.reg[i].size - len);
-                }
-                mblock.free.remove_region(i);
-                return (void*)ret;
-            }
+        for (int i = 0; i < free_entries_cnt; i++) {
+            int64 alloc_base = free_entries[i].base % aligned == 0 ? free_entries[i].base : free_entries[i].base + aligned - free_entries[i].base % aligned;
+            if (alloc_base - free_entries[i].base + len > free_entries[i].limit) continue;
+            free_entries[i].base = alloc_base + len;
+            free_entries[i].limit -= alloc_base - free_entries[i].base + len;
+            return (void*) alloc_base;
         }
         return nullptr;
     }
 
-    void mblock_free(void* addr) {
-        for (int i = 0; i < mblock.reserved.cnt; i++) {
-            if (mblock.reserved.reg[i].base <= (uint64) addr && mblock.reserved.reg[i].base + mblock.reserved.reg[i].size > (uint64) addr) {
-                mblock.free.add_region(mblock.reserved.reg[i].base, 
-                mblock.reserved.reg[i].size);
-                mblock.free.merge_region();
-                mblock.reserved.remove_region(i);
-                break;
-            }
-        }
+    uint64 getMemoryBound() {
+        return memory_bound;
     }
 }

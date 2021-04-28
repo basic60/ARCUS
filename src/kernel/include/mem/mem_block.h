@@ -26,6 +26,7 @@ namespace arcus::memory
         E820_TYPE_PMEM		= 7,
     };
 
+    // 初始化memblock，用于启动阶段，内存分配算法尚未完成初始化之前分配内存临时使用。
     int init_memblock() __init;
 
     struct mem_region {
@@ -33,32 +34,8 @@ namespace arcus::memory
         uint64 size;
     };
 
-    struct mem_type {
-        // men_region 最多支持多少个region
-        int max;
-        // mem_region 中当前有多少个region
-        int cnt;
-
-        mem_region* reg;
-
-        void add_region(uint64 base, uint64 size);
-
-        void remove_region(int cnt);
-
-        void merge_region();
-    };
-
-    struct mem_block {
-        mem_type free;
-
-        mem_type reserved;
-    };
-
-
     void* mblock_allocate(uint64 len, uint64 aligned = 0) __init;
 
-    void mblock_free(void* addr) __init;
-
-    mem_type* get_reserved_memory() __init;
+    uint64 getMemoryBound();
 }
 #endif

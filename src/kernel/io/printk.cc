@@ -9,7 +9,7 @@ namespace arcus
     static const int SCREEN_WIDTH = 80;
     static const int SCREEN_HEIGHT = 25;
 
-    static int idx __attribute__((section(".data"))) = 0; // 不指明在.data段则,0会导致放入.bss段。objcopy不会复制.bss段，导致idx不确定
+    static int idx __attribute__((section(".data"))) = 0; // 不指明在.data段，则0会导致放入.bss段。objcopy不会复制.bss段，导致idx不确定
 
     static void scroll_text_screen() {
         for (int i = 0; i < SCREEN_HEIGHT; i++) {
@@ -23,7 +23,6 @@ namespace arcus
         }
         idx = SCREEN_WIDTH * (SCREEN_HEIGHT - 1);
     }
-
 
     static void putc(char c) {
         if (idx + 1 >= SCREEN_WIDTH * SCREEN_HEIGHT)  {
@@ -94,7 +93,7 @@ namespace arcus
     }
 
     static void print_num(int64 val, bool u_sign, bool hex) {
-        if (val <0 && !u_sign) {
+        if (val < 0 && !u_sign) {
             val *= -1;
             putc('-');
         }
