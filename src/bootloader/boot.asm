@@ -1,11 +1,9 @@
 [BITS 16]
 org 7c00h
-mov si, 0
 mov ax, cs
 mov ds, ax
 mov es, ax           
 mov esp, 7c00h
-
 jmp load_stage2
 
 disk_rw_struct:
@@ -54,9 +52,9 @@ gdt64:
     dd gdt64
 
 enter_long_mode:
-    call memory_detect
-    call fill_page_table
-    call enable_paging
+    call memory_detect      ; 利用e820中断探测内存
+    call fill_page_table    ; 初始化临时页表
+    call enable_paging      ; 开启分页
     lgdt [gdt64.pointer]
 
     jmp CODE_SEG:long_mode_entry

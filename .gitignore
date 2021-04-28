@@ -1,6 +1,9 @@
 *.img
 *.o
 *.log
+GPATH
+GTAGS
+GRTAGS
 kernel_img
 .vscode/
 mkmyfs
