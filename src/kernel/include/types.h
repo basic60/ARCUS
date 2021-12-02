@@ -15,5 +15,9 @@ namespace arcus
     typedef struct atmoic_t {
         int counter;
     };
+
+    struct list_head {
+        list_head *prev, *next;
+    };
 }
 #endif

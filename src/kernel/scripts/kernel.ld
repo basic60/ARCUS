@@ -3,11 +3,11 @@ SECTIONS
 {
 	.init 0x100000:
 	{
-		PROVIDE(__INIT_BEGIN = .);
+		PROVIDE(__INIT_BEGIN__ = .);
 		*(.init)
 		*(.init*)
 		. = ALIGN(4096);
-		PROVIDE(__INIT_END = .);
+		PROVIDE(__INIT_END__ = .);
 	}
 
 	.text : 

@@ -17,6 +17,11 @@ namespace arcus::memory
         uint32 acpi;
     };
 
+    struct mem_range {
+        uint64 base;
+        uint64 limit;
+    };
+
     enum e820_type {
         E820_TYPE_RAM	    = 1,
         E820_TYPE_RESERVED	= 2,
@@ -27,15 +32,12 @@ namespace arcus::memory
     };
 
     // 初始化memblock，用于启动阶段，内存分配算法尚未完成初始化之前分配内存临时使用。
-    int init_memblock() __init;
+    void init_memblock() __init;
 
-    struct mem_region {
-        uint64 base;
-        uint64 size;
-    };
+    void* mblock_allocate(uint64 len, int aligned = 0) __init;
+    mem_range alloc_all_over_memory(uint64 start_addr, int aligned) __init;
 
-    void* mblock_allocate(uint64 len, uint64 aligned = 0) __init;
+    e820_entry* get_free_entries() __init;
 
-    uint64 getMemoryBound();
 }
 #endif

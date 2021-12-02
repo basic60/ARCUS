@@ -2,50 +2,105 @@
 #include"types.h" 
 #include"mem/mem_block.h"
 #include"str.h"
+#include"printk.h"
+#include"mem/page_allocator.h"
+
+extern long long __KERNEL_END__;
 namespace arcus::memory
 {
     static uint64 p1e[PAGE_ENTRY_CNT] __attribute__ ((aligned(PAGE_SIZE)));
     static uint64 base __attribute__((section(".data"))) = 0;
+    static uint64 cur_vmemmap_addr = 0;
+    uint64 tmp;
+
+
+    #define VMEMMAP_PAGE_ADDR(pg) ((uint64)(pg) - (uint64)(pg) % PAGE_SIZE)
 
     extern "C" void change_page_table(uint64* addr);
+    
+    void populate_vmemmap_range(uint64 phy_addr_base, uint64 limit) {
+        if (limit < PAGE_SIZE) return;
+        uint64 cur_base = phy_addr_base;
+        struct page* cur_page = (struct page*) VMEME_MAP_BASE;
 
+        do {
+            map_phy_to_virt(cur_base, cur_base);
+            struct page* cur_page = PFN_TO_PAGE(cur_base >> PAGE_SHIFT);
+            // 判断是否需要申请新的一页内存放置struct page结构
+            if (cur_vmemmap_addr != VMEMMAP_PAGE_ADDR(cur_page)) {
+                cur_vmemmap_addr = VMEMMAP_PAGE_ADDR(cur_page);
+                map_phy_to_virt(tmp = (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN), cur_vmemmap_addr);
+            }
+            // cur_page->virtual_address = cur_base;
+            add_page_to_buddy(cur_page);
+
+            cur_base += PAGE_SIZE;
+            limit -= PAGE_SIZE;
+        } while(limit >= PAGE_SIZE);
+    }
+
+    void init_sparse_vmemmap() {
+        mem_range free_mem_range;
+        // 将512MB以上所有内存加入vmalloc区域
+        while ((free_mem_range = alloc_all_over_memory(0x20000000, PAGE_SIZE)).base != 0) {
+            populate_vmemmap_range(free_mem_range.base, free_mem_range.limit);
+        }
+    }
 
     void init_mem_page() {
-        uint64* p2e_0 = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
-        memset(p2e_0, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+        // 0 ~ 512MB内存采用一一映射(identity map)
+        memset(p1e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+        for (uint64 i = 0; i < 0x20000000; i+= PAGE_SIZE) {
+            map_phy_to_virt(i, i);
+        }
+        change_page_table(p1e);
+        // 使用sparse_vmemmap映射剩余的内存
+        init_sparse_vmemmap();
+    }
 
-        p1e[0] = (uint64)p2e_0 | PAGE_PRESENT | PAGE_RW;
-        uint64* p3e_0 = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
-        memset(p3e_0, 0, PAGE_ENTRY_CNT * sizeof(uint64));
-        p2e_0[0] = (uint64)p3e_0 | PAGE_PRESENT | PAGE_RW;
-        for (int i = 0; i < PAGE_ENTRY_CNT; i++) {
+    // 将物理地址映射到指定的虚拟地址
+    void map_phy_to_virt(uint64 phy_addr, uint64 virt_addr) {
+        int p1e_idx = phy_addr >> 39 & 0x1ff;
+        int p2e_idx = phy_addr >> 30 & 0x1ff;
+        int p3e_idx = phy_addr >> 21 & 0x1ff;
+        int p4e_idx = phy_addr >> 12 & 0x1ff;
+        if (p1e[p1e_idx] == 0) {
+            uint64* p2e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
+            uint64* p3e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
             uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
-            p3e_0[i] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
-
-            for(int j = 0; j < PAGE_ENTRY_CNT; j++) {
-                p4e[j] = base | PAGE_PRESENT | PAGE_RW;
-                base += PAGE_SIZE;
-            }
+            memset(p2e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            memset(p3e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            memset(p4e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            p1e[p1e_idx] = (uint64) p2e | PAGE_PRESENT | PAGE_RW;
+            p2e[p2e_idx] = (uint64) p3e | PAGE_PRESENT | PAGE_RW;
+            p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            return;
         }
-        // 先映射1GB，防止内存不组无法建立完成的页表映射。
-        change_page_table(p1e);
-
-        uint64 max_gb = (getMemoryBound() -1) / (1024 * 1024 * 1024) + 1;
-        for (int i = 1; i < max_gb; i++) {
-            uint64* p3e_i = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
-            memset(p3e_i, 0, PAGE_ENTRY_CNT * sizeof(uint64));
-            p2e_0[i] = (uint64) p3e_i | PAGE_PRESENT | PAGE_RW;
-            for (int j = 0; j < PAGE_ENTRY_CNT; j++) {
-                uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
-                p3e_i[j] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
-
-                for(int k = 0; k < PAGE_ENTRY_CNT; k++) {
-                    p4e[k] = base | PAGE_PRESENT | PAGE_RW;
-                    base += PAGE_SIZE;
-                }
-            }
+        
+        uint64* p2e = (uint64*) (p1e[p1e_idx] >> 4 << 4);
+        if (p2e[p2e_idx] == 0) {
+            uint64* p3e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
+            uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
+            memset(p3e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            memset(p4e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            p2e[p2e_idx] = (uint64) p3e | PAGE_PRESENT | PAGE_RW;
+            p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            return;
         }
-        // 映射完整的页表
-        change_page_table(p1e);
+
+        uint64* p3e = (uint64*) (p2e[p2e_idx] >> 4 << 4);
+        if (p3e[p3e_idx] == 0) {
+            uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
+            memset(p4e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
+            p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            return;
+        }
+
+        uint64* p4e = (uint64*) (p3e[p3e_idx] >> 4 << 4);
+        p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+        return;
     }
 }
