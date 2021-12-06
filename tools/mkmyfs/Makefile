@@ -10,7 +10,7 @@ ifneq ($(DISK), $(wildcard $(DISK)))
 endif
 
 %.o:%.cc
-	$(CC) -std=c++17 -fno-strict-aliasing -g -c -m64 -I ./include -o $@ $<
+	$(CC) -std=c++17 -w -fno-strict-aliasing -g -c -m64 -I ./include -o $@ $<
 
 link: $(CPP_OBJ)
 	$(CC) $(CPP_OBJ) -o $(TARGET)

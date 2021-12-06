@@ -7,7 +7,7 @@ namespace arcus
     #define __init __section(.init.text)
     #define __initdata __section(.init.data)
     #define __initconst	__section(.init.rodata)
-    void init_kernel() __init;
+    void init_kernel();
 
 }
 #endif

@@ -1,7 +1,6 @@
 #include"init/init.h"
 #include"mem/mem_block.h"
 #include"mem/mmap.h"
-#include"mem/buddy.h"
 #include"printk.h"
 namespace arcus
 {
@@ -13,6 +12,5 @@ namespace arcus
         clear_text_screnn();
         memory::init_memblock();
         memory::init_mem_page();
-        // memory::BuddyPageAllocator::init();
     }
 }

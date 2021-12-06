@@ -1,7 +1,10 @@
 #include"mem/mem_block.h"
 #include"printk.h"
+#include"types.h"
 
-extern int __KERNEL_END__; // 内核结束地址为&__KERNEL_END__，定义于kernel.ld
+extern long long __KERNEL_END__; // 内核结束地址为&__KERNEL_END__，定义于kernel.ld
+extern long long __INIT_BEGIN__;
+extern long long __INIT_END__;
 
 namespace arcus::memory
 {
@@ -17,14 +20,13 @@ namespace arcus::memory
     static int free_entries_cnt __initdata;
     static e820_entry* overlap_list[MAX_E820_ENTRY] __initdata;
     static e820_end end_points[MAX_E820_ENTRY * 2] __initdata;
-    static mem_region free_region[MAX_E820_ENTRY] __initdata;
     static uint64 memory_bound;
     
 
     static void sort_end_points(e820_end* ptr, int cnt) __init;
     static void sanitize_e820_entries() __init;
  
-    int init_memblock() {
+    void init_memblock() {
         sanitize_e820_entries();
 
         uint64 kend = (uint64)(&__KERNEL_END__);
@@ -115,18 +117,36 @@ namespace arcus::memory
     }
 
     // 分配内存，内核初始化阶段临时使用。
-    void* mblock_allocate(uint64 len, uint64 aligned) {
+    void* mblock_allocate(uint64 len, int aligned) {
         for (int i = 0; i < free_entries_cnt; i++) {
             int64 alloc_base = free_entries[i].base % aligned == 0 ? free_entries[i].base : free_entries[i].base + aligned - free_entries[i].base % aligned;
             if (alloc_base - free_entries[i].base + len > free_entries[i].limit) continue;
-            free_entries[i].base = alloc_base + len;
             free_entries[i].limit -= alloc_base - free_entries[i].base + len;
+            free_entries[i].base = alloc_base + len;
             return (void*) alloc_base;
         }
         return nullptr;
     }
 
-    uint64 getMemoryBound() {
-        return memory_bound;
+    // 分配大于开始地址的所有可用内存
+    mem_range alloc_all_over_memory(uint64 start_addr, int aligned) {
+        mem_range ragne = {0, 0};
+        for (int i = 0; i < free_entries_cnt; i++) {
+            uint64 alloc_base = start_addr + start_addr % aligned;
+            if (free_entries[i].limit == 0 || free_entries[i].base + free_entries[i].limit <= alloc_base)
+                continue;
+            if (free_entries[i].base < alloc_base) {
+                ragne.base = alloc_base;
+                ragne.limit = free_entries[i].limit - alloc_base;
+                free_entries[i].limit = alloc_base - free_entries[i].base;
+            } else {
+                ragne.base = free_entries[i].base;
+                ragne.limit = free_entries[i].limit;
+                free_entries[i].limit = 0;
+            }
+            return ragne;
+        }
+        return ragne;
     }
+
 }
