@@ -17,7 +17,7 @@ namespace arcus::memory
     #define PAGE_RW 2
     #define PAGE_PRESENT 1
     // 所有struct page结构映射基地址
-    #define VMEME_MAP_BASE 0xffff000000000000
+    #define VMEME_MAP_BASE 0x100000000000
 
     #define vmemmap ((struct page*) VMEME_MAP_BASE)
 
@@ -26,7 +26,7 @@ namespace arcus::memory
 
     void init_mem_page() __init;
     // 将物理地址映射到虚拟地址
-    void map_phy_to_virt(uint64 phy_addr, uint64 virt_addr);
+    void map_virt_to_phy(uint64 phy_addr, uint64 virt_addr);
 
 }
 #endif

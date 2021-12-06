@@ -10,28 +10,27 @@ namespace arcus::memory
 {
     static uint64 p1e[PAGE_ENTRY_CNT] __attribute__ ((aligned(PAGE_SIZE)));
     static uint64 base __attribute__((section(".data"))) = 0;
-    static uint64 cur_vmemmap_addr = 0;
+    static uint64 cur_vmemmap_addr __attribute__((section(".data"))) = 0;
     uint64 tmp;
-
 
     #define VMEMMAP_PAGE_ADDR(pg) ((uint64)(pg) - (uint64)(pg) % PAGE_SIZE)
 
     extern "C" void change_page_table(uint64* addr);
-    
+
     void populate_vmemmap_range(uint64 phy_addr_base, uint64 limit) {
         if (limit < PAGE_SIZE) return;
         uint64 cur_base = phy_addr_base;
         struct page* cur_page = (struct page*) VMEME_MAP_BASE;
 
         do {
-            map_phy_to_virt(cur_base, cur_base);
+            map_virt_to_phy(cur_base, cur_base);
             struct page* cur_page = PFN_TO_PAGE(cur_base >> PAGE_SHIFT);
             // 判断是否需要申请新的一页内存放置struct page结构
             if (cur_vmemmap_addr != VMEMMAP_PAGE_ADDR(cur_page)) {
                 cur_vmemmap_addr = VMEMMAP_PAGE_ADDR(cur_page);
-                map_phy_to_virt(tmp = (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN), cur_vmemmap_addr);
+                map_virt_to_phy(cur_vmemmap_addr, (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN));
             }
-            // cur_page->virtual_address = cur_base;
+            cur_page->virtual_address = cur_base;
             add_page_to_buddy(cur_page);
 
             cur_base += PAGE_SIZE;
@@ -51,19 +50,20 @@ namespace arcus::memory
         // 0 ~ 512MB内存采用一一映射(identity map)
         memset(p1e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
         for (uint64 i = 0; i < 0x20000000; i+= PAGE_SIZE) {
-            map_phy_to_virt(i, i);
+            map_virt_to_phy(i, i);
         }
         change_page_table(p1e);
         // 使用sparse_vmemmap映射剩余的内存
         init_sparse_vmemmap();
     }
 
-    // 将物理地址映射到指定的虚拟地址
-    void map_phy_to_virt(uint64 phy_addr, uint64 virt_addr) {
-        int p1e_idx = phy_addr >> 39 & 0x1ff;
-        int p2e_idx = phy_addr >> 30 & 0x1ff;
-        int p3e_idx = phy_addr >> 21 & 0x1ff;
-        int p4e_idx = phy_addr >> 12 & 0x1ff;
+    // 将虚拟地址映射到指定的物理地址
+    void map_virt_to_phy(uint64 virt_addr, uint64 phy_addr) {
+        int p1e_idx = virt_addr >> 39 & 0x1ff;
+        int p2e_idx = virt_addr >> 30 & 0x1ff;
+        int p3e_idx = virt_addr >> 21 & 0x1ff;
+        int p4e_idx = virt_addr >> 12 & 0x1ff;
+
         if (p1e[p1e_idx] == 0) {
             uint64* p2e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
             uint64* p3e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
@@ -74,11 +74,11 @@ namespace arcus::memory
             p1e[p1e_idx] = (uint64) p2e | PAGE_PRESENT | PAGE_RW;
             p2e[p2e_idx] = (uint64) p3e | PAGE_PRESENT | PAGE_RW;
             p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
-            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = phy_addr | PAGE_PRESENT | PAGE_RW;
             return;
         }
         
-        uint64* p2e = (uint64*) (p1e[p1e_idx] >> 4 << 4);
+        uint64* p2e = (uint64*) ((p1e[p1e_idx] >> PAGE_SHIFT) << PAGE_SHIFT);
         if (p2e[p2e_idx] == 0) {
             uint64* p3e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
             uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
@@ -86,21 +86,21 @@ namespace arcus::memory
             memset(p4e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
             p2e[p2e_idx] = (uint64) p3e | PAGE_PRESENT | PAGE_RW;
             p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
-            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = phy_addr | PAGE_PRESENT | PAGE_RW;
             return;
         }
 
-        uint64* p3e = (uint64*) (p2e[p2e_idx] >> 4 << 4);
+        uint64* p3e = (uint64*) ((p2e[p2e_idx] >> PAGE_SHIFT) << PAGE_SHIFT);
         if (p3e[p3e_idx] == 0) {
             uint64* p4e = (uint64*) mblock_allocate(PAGE_ENTRY_CNT * sizeof(uint64), PAGE_ALIGN);
             memset(p4e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
             p3e[p3e_idx] = (uint64) p4e | PAGE_PRESENT | PAGE_RW;
-            p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+            p4e[p4e_idx] = phy_addr | PAGE_PRESENT | PAGE_RW;
             return;
         }
 
-        uint64* p4e = (uint64*) (p3e[p3e_idx] >> 4 << 4);
-        p4e[p4e_idx] = virt_addr | PAGE_PRESENT | PAGE_RW;
+        uint64* p4e = (uint64*) ((p3e[p3e_idx] >> PAGE_SHIFT) << PAGE_SHIFT);
+        p4e[p4e_idx] = phy_addr | PAGE_PRESENT | PAGE_RW;
         return;
     }
 }

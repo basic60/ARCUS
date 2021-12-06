@@ -14,7 +14,7 @@ link: $(CPP_OBJ) $(ASM_OBJ) ./crt/crti.o ./crt/crtn.o
 	$(CC) -nostdlib -T ./scripts/kernel.ld ./crt/crti.o $(CRT_BEG_OBJ) $(CPP_OBJ) $(ASM_OBJ) $(CRT_END_OBJ) ./crt/crtn.o -lgcc -o $(TARGET)
 
 %.o:%.cc
-	$(CC) -std=c++17 -g -c -ffreestanding -fno-rtti -fno-exceptions -fno-use-cxa-atexit -I ./include -o $@ $<
+	$(CC) -std=c++17 -w -g -c -ffreestanding -fno-rtti -fno-exceptions -fno-use-cxa-atexit -I ./include -o $@ $<
 
 %.o:%.asm
 	nasm -f elf64 -o $@ $<
