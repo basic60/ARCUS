@@ -2,6 +2,7 @@
 #define __ARCUS_INCLUDE_MBLOCK
 #include"types.h"
 #include"init/init.h"
+
 namespace arcus::memory
 {
     #define MAX_BUDDY_SIZE 10
@@ -36,8 +37,8 @@ namespace arcus::memory
 
     void* mblock_allocate(uint64 len, int aligned = 0) __init;
     mem_range alloc_all_over_memory(uint64 start_addr, int aligned) __init;
-
     e820_entry* get_free_entries() __init;
+    uint64 get_max_memory_addr();
 
 }
 #endif

@@ -11,7 +11,6 @@ namespace arcus::memory
     static uint64 p1e[PAGE_ENTRY_CNT] __attribute__ ((aligned(PAGE_SIZE)));
     static uint64 base __attribute__((section(".data"))) = 0;
     static uint64 cur_vmemmap_addr __attribute__((section(".data"))) = 0;
-    uint64 tmp;
 
     #define VMEMMAP_PAGE_ADDR(pg) ((uint64)(pg) - (uint64)(pg) % PAGE_SIZE)
 
@@ -31,7 +30,8 @@ namespace arcus::memory
                 map_virt_to_phy(cur_vmemmap_addr, (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN));
             }
             cur_page->virtual_address = cur_base;
-            add_page_to_buddy(cur_page);
+            cur_page->type = 0;
+            free_pages(cur_page);
 
             cur_base += PAGE_SIZE;
             limit -= PAGE_SIZE;

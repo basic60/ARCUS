@@ -5,7 +5,17 @@
 
 namespace arcus::memory
 {
-    void add_page_to_buddy(struct page* pg);
-    void free_page(struct page* pg);
+    #define MAX_PAGE_ORDER_CNT 11
+    #define EXTRACT_PAGE_ORDER(pg) ((uint64) pg->type ^ ((uint64) pg->type >> 4 << 4))
+    #define SET_PAGE_ORDER(pg, order) (pg->type = (pg->type >> 4 << 4) | order)
+
+    struct buddy_free_area {
+        size_t nr_free;
+        struct list_head* free_lst;
+    };
+
+    void init_buddy() __init;
+    struct page* alloc_pages(int order);
+    int free_pages(struct page* pg);
 }
 #endif

@@ -20,8 +20,7 @@ namespace arcus::memory
     static int free_entries_cnt __initdata;
     static e820_entry* overlap_list[MAX_E820_ENTRY] __initdata;
     static e820_end end_points[MAX_E820_ENTRY * 2] __initdata;
-    static uint64 memory_bound;
-    
+    static uint64 max_memory_addr;
 
     static void sort_end_points(e820_end* ptr, int cnt) __init;
     static void sanitize_e820_entries() __init;
@@ -36,7 +35,7 @@ namespace arcus::memory
             free_entries[free_entries_cnt].base = new_entries[i].base < kend ? kend : new_entries[i].base;
             free_entries[free_entries_cnt++].limit = new_entries[i].base < kend ? new_entries[i].limit - kend + new_entries[i].base : new_entries[i].limit;
         }
-        memory_bound = free_entries[free_entries_cnt - 1].base + free_entries[free_entries_cnt - 1].limit;
+        max_memory_addr = free_entries[free_entries_cnt - 1].base + free_entries[free_entries_cnt - 1].limit;
     }
 
     // 整理e820表项
@@ -147,6 +146,10 @@ namespace arcus::memory
             return ragne;
         }
         return ragne;
+    }
+
+    uint64 get_max_memory_addr() {
+        return max_memory_addr;
     }
 
 }
