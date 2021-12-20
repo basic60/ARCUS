@@ -28,7 +28,7 @@ link: $(LOADER_C_OBJ) $(LOADER_ASM_OBJ)
 	$(LD) -nostdlib -Ttext 0x8000 $(LOADER_C_OBJ) $(LOADER_ASM_OBJ) -T scripts/loader.ld -o $(TARGET_LOADER_TMP)
 
 %.o:%.c
-	$(CC) -c -ffreestanding -I ./include -o $@ $<
+	$(CC) -c -w -ffreestanding -I ./include -o $@ $<
 
 %.o:%.asm
 	$(ASM) -f elf64 -o $@ $<

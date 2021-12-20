@@ -2,6 +2,7 @@
 #define __ARCUS_INCLUDE_MMAP
 #include"init/init.h"
 #include"types.h"
+#include"list.h"
 namespace arcus::memory
 {
     struct page {
