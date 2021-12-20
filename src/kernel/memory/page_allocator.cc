@@ -4,7 +4,6 @@
 #include"list.h"
 #include"printk.h"
 
-
 namespace arcus::memory
 {
     static struct buddy_free_area free_areas[MAX_PAGE_ORDER_CNT];
