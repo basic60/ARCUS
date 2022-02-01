@@ -69,6 +69,8 @@ namespace arcus::memory
      * 分配2^order个连续的page
      */
     struct page* alloc_pages(int order) {
+        if (order >= MAX_PAGE_ORDER_CNT)
+            return nullptr;
         // 分裂大buddy块以支持非配需求
         if (!free_areas[order].nr_free)
             split_buddy_to_order(order);
@@ -105,8 +107,8 @@ namespace arcus::memory
     }
 
     void init_buddy() {
-        int max_bg = get_max_memory_addr() / 0x40000000 + (get_max_memory_addr() % 0x40000000 == 0 ? 0 : 1);
-        uint64 bitmap_length = max_bg * 0x40000000 / PAGE_SIZE / 8 ;
+        int max_gb = get_max_memory_addr() / 0x40000000 + (get_max_memory_addr() % 0x40000000 == 0 ? 0 : 1);
+        uint64 bitmap_length = max_gb * 0x40000000 / PAGE_SIZE / 8 ;
         buddy_bitmap = (int64*) mblock_allocate(bitmap_length, 1024);
         memset(buddy_bitmap, 0, bitmap_length);
         for (int i = 0; i < MAX_PAGE_ORDER_CNT; i++) {

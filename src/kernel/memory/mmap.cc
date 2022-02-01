@@ -12,8 +12,6 @@ namespace arcus::memory
     static uint64 base __attribute__((section(".data"))) = 0;
     static uint64 cur_vmemmap_addr __attribute__((section(".data"))) = 0;
 
-    #define VMEMMAP_PAGE_ADDR(pg) ((uint64)(pg) - (uint64)(pg) % PAGE_SIZE)
-
     extern "C" void change_page_table(uint64* addr);
 
     void populate_vmemmap_range(uint64 phy_addr_base, uint64 limit) {
@@ -21,16 +19,20 @@ namespace arcus::memory
         uint64 cur_base = phy_addr_base;
         struct page* cur_page = (struct page*) VMEME_MAP_BASE;
 
+        int tt = 1;
         do {
-            map_virt_to_phy(cur_base, cur_base);
+            map_virt_to_phy_early(cur_base, cur_base);
             struct page* cur_page = PFN_TO_PAGE(cur_base >> PAGE_SHIFT);
             // 判断是否需要申请新的一页内存放置struct page结构
-            if (cur_vmemmap_addr != VMEMMAP_PAGE_ADDR(cur_page)) {
-                cur_vmemmap_addr = VMEMMAP_PAGE_ADDR(cur_page);
-                map_virt_to_phy(cur_vmemmap_addr, (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN));
+            if ((uint64) cur_page + sizeof(page) - cur_vmemmap_addr > PAGE_SIZE) {
+                cur_vmemmap_addr = ((uint64) cur_page + sizeof(page)) >> PAGE_SHIFT << PAGE_SHIFT;
+                map_virt_to_phy_early(cur_vmemmap_addr, (uint64) mblock_allocate(PAGE_SIZE, PAGE_ALIGN));
             }
             cur_page->virtual_address = cur_base;
             cur_page->type = 0;
+            cur_page->obj = {0, 0};
+            cur_page->freelist = nullptr;
+            cur_page->slab = nullptr;
             free_pages(cur_page);
 
             cur_base += PAGE_SIZE;
@@ -50,7 +52,7 @@ namespace arcus::memory
         // 0 ~ 512MB内存采用一一映射(identity map)
         memset(p1e, 0, PAGE_ENTRY_CNT * sizeof(uint64));
         for (uint64 i = 0; i < 0x20000000; i+= PAGE_SIZE) {
-            map_virt_to_phy(i, i);
+            map_virt_to_phy_early(i, i);
         }
         change_page_table(p1e);
         // 使用sparse_vmemmap映射剩余的内存
@@ -58,7 +60,7 @@ namespace arcus::memory
     }
 
     // 将虚拟地址映射到指定的物理地址
-    void map_virt_to_phy(uint64 virt_addr, uint64 phy_addr) {
+    void map_virt_to_phy_early(uint64 virt_addr, uint64 phy_addr) {
         int p1e_idx = virt_addr >> 39 & 0x1ff;
         int p2e_idx = virt_addr >> 30 & 0x1ff;
         int p3e_idx = virt_addr >> 21 & 0x1ff;
