@@ -8,7 +8,13 @@ namespace arcus::memory
     struct page {
         uint64 virtual_address;
         int type;
+        struct {
+            uint16 tot;
+            uint16 inuse;
+        } obj;
         struct list_head lru;
+        void* freelist;
+        struct kmem_cache* slab;
     };
 
     #define PAGE_ENTRY_CNT 512
@@ -27,7 +33,7 @@ namespace arcus::memory
 
     void init_mem_page() __init;
     // 将物理地址映射到虚拟地址
-    void map_virt_to_phy(uint64 phy_addr, uint64 virt_addr);
+    void map_virt_to_phy_early(uint64 phy_addr, uint64 virt_addr) __init;
 
 }
 #endif
