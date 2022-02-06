@@ -39,14 +39,16 @@ dw 0xaa55
 
 %define E820_BUFFER 0xc000
 %define PAGE_TABLE 0x40000
-%define CODE_SEG   0x0008
-%define DATA_SEG   0x0010
+%define CODE_SEG 0x0008
+%define DATA_SEG 0x0010
 
 gdt64:
 .Null:
     dq 0                              ; Null Descriptor - should be present.
 .Code:
     dq 0x00209A0000000000             ; 64-bit code descriptor (exec/read).
+    dq 0x0000920000000000             ; 64-bit data descriptor (read/write).
+ALIGN 4, dw 0
 .pointer:
     dw $ - gdt64 - 1                    ; 16-bit Size (Limit) of GDT.
     dd gdt64
@@ -174,6 +176,13 @@ enable_paging:
 
 [BITS 64]
 long_mode_entry:
+    mov ax,DATA_SEG
+    mov ds,ax       ;DS存放数据段描述符。
+    mov es,ax
+    mov fs,ax
+    mov gs,ax
+    mov ss,ax
+
     call cli_clear
     jmp 0x8000
 
