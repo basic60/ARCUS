@@ -107,14 +107,22 @@ namespace arcus::interrupt
     }
 
     void isr_dispatcher(interrupt_stack* data) {
+        if (int_handler[data->int_num])
+            int_handler[data->int_num](data);
     }
 
     void isr_pic_dispatcher(interrupt_stack* data) {
+        if (int_handler[data->int_num])
+            int_handler[data->int_num](data);
+        // 发送重设信号给从片与主片表示中断处理完成
         if (data->int_num >= 40) 
-            // 发送重设信号给从片
             io::write_port(0xA0, 0x20);
-        // 发送重设信号给主片
         io::write_port(0x20, 0x20);
     }
 
+    void bind_int_handler(int int_id, void (*handler)(interrupt_stack* data)) {
+        if (int_id < 0 || int_id > 255) 
+            return;
+        int_handler[int_id] = handler;
+    }
 }

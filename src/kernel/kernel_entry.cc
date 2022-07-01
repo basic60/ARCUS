@@ -6,5 +6,4 @@ extern "C" void kernel_entry();
 
 void kernel_entry() {
     init_kernel();
-    while(1);
 }
