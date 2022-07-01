@@ -94,8 +94,8 @@ isr_common_stub:
 	mov gs, bx
 	mov ss, bx
 
-    add rsp, 16    ; 清理栈中的错误码和中断号
     popall
+    add rsp, 16    ; 清理栈中的错误码和中断号
     sti
     iretq
 
@@ -123,8 +123,8 @@ isr_pic_common_stub:
 	mov gs, bx
 	mov ss, bx
 
-    add rsp, 16    ; 清理栈中的错误码和中断号
     popall
+    add rsp, 16    ; 清理栈中的错误码和中断号
     sti
     iretq
 

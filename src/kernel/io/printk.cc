@@ -25,7 +25,7 @@ namespace arcus
     }
 
     static void putc(char c) {
-        if (idx + 1 >= SCREEN_WIDTH * SCREEN_HEIGHT)  {
+        if (idx >= SCREEN_WIDTH * SCREEN_HEIGHT)  {
             scroll_text_screen();
         }
         vmem[idx++] = (COLOR_WHITE << 8) | c;

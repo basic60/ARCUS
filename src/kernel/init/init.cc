@@ -4,6 +4,7 @@
 #include"mem/page_allocator.h"
 #include"mem/slab.h"
 #include"interrupt/idt.h"
+#include"interrupt/timer.h"
 #include"printk.h"
 namespace arcus
 {
@@ -18,8 +19,10 @@ namespace arcus
         memory::init_mem_page();
         // 初始化slab分配器和内存分配函数，至此内核内存分配相关功能初始化完成
         memory::init_kmem_cache();
-        interrupt::init_interrupt();
         // 初始化中断处理程序
+        interrupt::init_interrupt();
+        // 初始化计时器
+        interrupt::init_timer(200);
         printk("Welcome to Arcus!\n");
     }
 }

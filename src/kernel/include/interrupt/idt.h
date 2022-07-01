@@ -101,21 +101,39 @@ namespace arcus::interrupt
     extern "C" void isr30();
     extern "C" void isr31();
     
+    // 电脑系统计时器
     extern "C" void isr32();
+    // 键盘
     extern "C" void isr33();
+    // 与 IRQ9 相接，MPU-401 MD 使用
     extern "C" void isr34();
+    // 串口设备
     extern "C" void isr35();
+    // 串口设备
     extern "C" void isr36();
+    // 建议声卡使用
     extern "C" void isr37();
+    // 软驱传输控制使用
     extern "C" void isr38();
+    // 打印机传输控制使用
     extern "C" void isr39();
+    // 即时时钟
     extern "C" void isr40();
+    // 与 IRQ2 相接，可设定给其他硬件
     extern "C" void isr41();
+    // 建议网卡使用
     extern "C" void isr42();
+    // 建议 AGP 显卡使用
     extern "C" void isr43();
+    // 接 PS/2 鼠标，也可设定给其他硬件
     extern "C" void isr44();
+    // 协处理器使用
     extern "C" void isr45();
+    // IDE0 传输控制使用
     extern "C" void isr46();
+    // IDE1 传输控制使用
     extern "C" void isr47();
+
+    void bind_int_handler(int int_id, void (*)(interrupt_stack* data));
 }
 #endif
