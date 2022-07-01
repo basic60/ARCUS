@@ -32,6 +32,7 @@ build_kernel:
 .PHONY: qemu
 qemu:
 	qemu-system-x86_64 -smp 8 -m 8g -hda $(DISK) -monitor stdio -no-reboot
+	
 .PHONY: clean
 clean:
 	$(MAKE) clean -C bootloader
