@@ -17,7 +17,7 @@ ifneq ($(DISK), $(wildcard $(DISK)))
 endif
 	$(FORMATOR) $(DISK) -f
 	dd if=$(FSC_OBJ) of=$(DISK) conv=notrunc
-	dd if=$(LOADER_OBJ) of=$(DISK) conv=notrunc seek=2
+	dd if=$(LOADER_OBJ) of=$(DISK) conv=notrunc seek=3
 	$(FORMATOR) $(DISK) -w $(KERNEL)
 	sleep 1
 

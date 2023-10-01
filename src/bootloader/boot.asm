@@ -1,10 +1,11 @@
 [BITS 16]
 org 7c00h
-mov ax, cs
-mov ds, ax
-mov es, ax           
-mov esp, 7c00h
-jmp load_stage2
+start:
+    mov ax, cs
+    mov ds, ax
+    mov es, ax           
+    mov esp, 7c00h
+    jmp load_stage2
 
 disk_rw_struct:
     db 16  ; size of disk_rw_struct, 10h
@@ -26,6 +27,7 @@ read_disk_by_int13h:
     int 13h
     ret
 
+; 第一个扇区代码作用：读取硬盘加载加下来几个扇区的代码到内存中
 load_stage2:
     push dword 0x7e00   ; target address
     push word 50        ; number of blocks
@@ -37,10 +39,10 @@ load_stage2:
 times 510-($-$$) db 0
 dw 0xaa55
 
-%define E820_BUFFER 0xc000
-%define PAGE_TABLE 0x40000
-%define CODE_SEG 0x0008
-%define DATA_SEG 0x0010
+E820_BUFFER equ 0xc000
+PAGE_TABLE equ 0x40000
+CODE_SEG equ 0x0008
+DATA_SEG equ 0x0010
 
 gdt64:
 .Null:
@@ -58,7 +60,6 @@ enter_long_mode:
     call fill_page_table    ; 初始化临时页表
     call enable_paging      ; 开启分页
     lgdt [gdt64.pointer]
-
     jmp CODE_SEG:long_mode_entry
     
 mmap_entry_count equ E820_BUFFER
@@ -174,6 +175,40 @@ enable_paging:
     mov cr0, eax
     ret
 
+times 1024 - ($-start) db 0
+
+multi_core_boot:    ; 0x8000开始
+    jmp 0x0000:ap_main
+ap_main:
+    mov ax, 0
+    mov ds, ax
+    mov es, ax
+    mov ss, ax
+    mov fs, ax
+    mov gs, ax
+
+    mov eax, 0x1
+    cpuid
+    and ebx, 0xff000000
+    shr ebx, 24
+    mov eax, ebx                 ; 获取cpuid
+    cmp eax, 8                   ; 最多支持8C
+    jle .start_multi_core_boot
+    hlt
+    .start_multi_core_boot:
+        mov ebx, 7c00h
+        .minus_stack_loop:
+            cmp eax, 0
+            je .do_start_multi_core
+            sub eax, 1
+            sub ebx, 400h            ; 每个核分配不同的栈，初始1kb
+            jmp .minus_stack_loop
+        .do_start_multi_core:
+            mov esp, ebx
+            call enable_paging      ; 开启分页
+            lgdt [gdt64.pointer]
+            jmp CODE_SEG:long_mode_entry
+
 [BITS 64]
 long_mode_entry:
     mov ax,DATA_SEG
@@ -184,12 +219,12 @@ long_mode_entry:
     mov ss,ax
 
     call cli_clear
-    jmp 0x8000
+    jmp 0x8200
 
 cli_clear:
-    mov edi,0xB8000
-    mov ecx,500
-    mov eax,0x0030       ; Set the value to set the screen to: Blue background, white foreground, blank spaces.
+    mov edi, 0xB8000
+    mov ecx, 500
+    mov eax, 0x0030       ; Set the value to set the screen to: Blue background, white foreground, blank spaces.
     rep stosq
     mov edi, 0xb8000         
     ret

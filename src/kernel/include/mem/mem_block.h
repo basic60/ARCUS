@@ -21,6 +21,7 @@ namespace arcus::memory
     struct mem_range {
         uint64 base;
         uint64 limit;
+        uint32 mem_type;
     };
 
     enum e820_type {

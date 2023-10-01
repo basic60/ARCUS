@@ -96,7 +96,6 @@ isr_common_stub:
 
     popall
     add rsp, 16    ; 清理栈中的错误码和中断号
-    sti
     iretq
 
 [extern isr_pic_dispatcher]
@@ -125,7 +124,6 @@ isr_pic_common_stub:
 
     popall
     add rsp, 16    ; 清理栈中的错误码和中断号
-    sti
     iretq
 
 

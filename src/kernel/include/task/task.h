@@ -6,15 +6,12 @@
 
 namespace arcus::task
 {
-    #define TASK_STACK_SIZE 8192
-
+    #define TASK_STACK_SIZE 4096
     struct task_struct {
         // 仅用于展示进程信息使用
         const char* name;
         // 进程id
         uint32 pid;
-        // 进程栈
-        void* stack;
         // 进程上下文
         list_head list;
 
@@ -36,16 +33,20 @@ namespace arcus::task
             uint64 rax; 
             uint64 rflags;
             uint64 rsp;
+            
         }__attribute__((packed)) context;
 
         list_head children;
-        uint64 start_time;
-    
+        uint64 sleep_time;
     };
 
     void __init init_task();
 
     void schedule();
+
+    void kthread_create(int (*fn)(void*), void* arg, const char* task_name);
+
+    extern "C" void sleep(uint64 ms);
 
     extern "C" void switch_task(task_struct::task_context* cur, task_struct::task_context* next);
 }
