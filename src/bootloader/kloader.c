@@ -18,10 +18,13 @@
 #define SECTOR_SIZE 512
 #define BLOCK_SIZE 4096
 #define KERNEL_NAME "arcus_kerenl"
+
 void loader_main() __attribute__ ((section (".text.main"))); // make the loader_main function at the beginning of the .text section
 uint64 get_lba_by_dbnum();
+void find_kernel_file_and_read();
 void load_kernel_from_disk(uint64 ind_num);
-void load_elf_kernel(uint8* kaddr);
+void load_elf_kernel(uint8* kaddr, uint32 cpu_id);
+uint32 get_apic_id();
 
 static struct superblock* spblock = (struct superblock*)(FS_BUFFER);
 static struct block_group_desc* gpdesc_ptr = (struct block_group_desc*)(FS_BUFFER + BLOCK_SIZE);
@@ -31,8 +34,20 @@ static uint8* tmp_buffer = (uint8*)(FS_BUFFER + BLOCK_SIZE * 2 + SECTOR_SIZE * 2
 static uint8* tmp_buffer2 = (uint8*)(FS_BUFFER + BLOCK_SIZE * 3 + SECTOR_SIZE * 2);
 
 const uint64 KERNEL_FILE_BASE = 0xa00000;
+static int32 bsp_cpu_id __attribute__((section(".data"))) = -1;
+static uint64 kernel_entry __attribute__((section(".data"))) = 0;
 
 void loader_main() {
+    // bsp_cpu_id为-1，说明是第一次执行这段代码，进入这段代码的cpu为bsp，加载内核并对bsp赋值
+    if (bsp_cpu_id == -1) {
+        bsp_cpu_id = get_apic_id();
+        find_kernel_file_and_read(bsp_cpu_id);
+    }    
+    // bsp_cpu_id不为-1，说明进入这段代码的cpu是ap，直接跳转到内核入口
+    jump_to_kernel(kernel_entry);
+}
+
+void find_kernel_file_and_read(uint32 cpu_id) {
     ld_read_disk(FS_START_LBA, 8, FS_BUFFER);
     if (spblock->signature != FS_SIGNATURE) {
         ld_print("Filesystem not found!");
@@ -49,8 +64,7 @@ void loader_main() {
         if (!ld_strcmp(KERNEL_NAME, dic_ptr[i].name)) {
             ld_print("Find kernel: /%s inode: %d \n", dic_ptr[i].name, dic_ptr[i].inode_num);
             load_kernel_from_disk(dic_ptr[i].inode_num);
-            load_elf_kernel(KERNEL_FILE_BASE);
-
+            load_elf_kernel(KERNEL_FILE_BASE, cpu_id);
         }
     }
 }
@@ -95,9 +109,9 @@ void load_kernel_from_disk(uint64 ind_num) {
     }
 }
 
-void load_elf_kernel(uint8* kaddr) {
+void load_elf_kernel(uint8* kaddr, uint32 cpu_id) {
     uint8* tmp = (uint8*)KERNEL_FILE_BASE;
-    struct elf_head* ehead = (struct elf_head*)tmp;
+    struct elf_head* ehead = (struct elf_head*) KERNEL_FILE_BASE;
     if (ehead->e_ident[0] != 0x7f || ehead->e_ident[1] != 'E' || ehead->e_ident[2] != 'L' || ehead->e_ident[3] != 'F') {
         ld_print("Unsupported ABI! %d %d %d %d", ehead->e_ident[0], ehead->e_ident[1], ehead->e_ident[2], ehead->e_ident[3]);
         asm("hlt");     
@@ -112,8 +126,8 @@ void load_elf_kernel(uint8* kaddr) {
             target[k] = src[k];
         }
     }
+    kernel_entry = ehead->e_entry;
     jump_to_kernel(ehead->e_entry);
-    asm("hlt");    
 }
 
 uint64 get_lba_by_dbnum(uint64 dnum) {

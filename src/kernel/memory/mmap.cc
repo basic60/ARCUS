@@ -14,12 +14,11 @@ namespace arcus::memory
 
     extern "C" void change_page_table(uint64* addr);
 
-    void populate_vmemmap_range(uint64 phy_addr_base, uint64 limit) {
+    void populate_vmemmap_range(uint64 phy_addr_base, uint64 limit, uint32 mem_type) {
         if (limit < PAGE_SIZE) return;
         uint64 cur_base = phy_addr_base;
         struct page* cur_page = (struct page*) VMEME_MAP_BASE;
 
-        int tt = 1;
         do {
             map_virt_to_phy_early(cur_base, cur_base);
             struct page* cur_page = PFN_TO_PAGE(cur_base >> PAGE_SHIFT);
@@ -33,7 +32,8 @@ namespace arcus::memory
             cur_page->obj = {0, 0};
             cur_page->freelist = nullptr;
             cur_page->slab = nullptr;
-            free_pages(cur_page);
+            if (mem_type == E820_TYPE_RAM)
+                free_pages(cur_page);
 
             cur_base += PAGE_SIZE;
             limit -= PAGE_SIZE;
@@ -42,9 +42,18 @@ namespace arcus::memory
 
     void init_sparse_vmemmap() {
         mem_range free_mem_range;
+        mem_range last_mem_range = {0, 0, 0};
         // 将512MB以上所有内存加入vmalloc区域
         while ((free_mem_range = alloc_all_over_memory(0x20000000, PAGE_SIZE)).base != 0) {
-            populate_vmemmap_range(free_mem_range.base, free_mem_range.limit);
+            // e820列表中不包含的地址段，默认不可用
+            if (last_mem_range.base > 0 && last_mem_range.base + last_mem_range.limit < free_mem_range.base) {
+                last_mem_range.base = last_mem_range.base + last_mem_range.limit;
+                last_mem_range.limit = free_mem_range.base - last_mem_range.base;
+                last_mem_range.mem_type = E820_TYPE_UNUSABLE;
+                populate_vmemmap_range(last_mem_range.base, last_mem_range.limit, last_mem_range.mem_type);
+            }
+            last_mem_range = free_mem_range;
+            populate_vmemmap_range(free_mem_range.base, free_mem_range.limit, free_mem_range.mem_type);
         }
     }
 

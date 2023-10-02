@@ -12,11 +12,8 @@ switch_task:
         mov [r8 + 32], r11
         mov [r8 + 40], r10
         mov [r8 + 48], r9
-        
-        mov r9, [rsp + 8]
+        pop r9
         mov [r8 + 56], r9
-        pop r8
-        
         mov [r8 + 64], rdi
         mov [r8 + 72], rsi
         mov [r8 + 80], rbp
@@ -25,7 +22,7 @@ switch_task:
         mov [r8 + 104], rbx
         
         mov [r8 + 112], rax
-        pushf
+        pushfq
         pop r9
         mov[r8 + 120], r9
         mov[r8 + 128], rsp
@@ -41,7 +38,7 @@ switch_task:
 
         mov r9, [r8 + 120]
         push r9
-        popf
+        popfq
 
         mov r9, [r8 + 48]
 

@@ -31,8 +31,10 @@ namespace arcus::memory
         uint64 kend = (uint64)(&__KERNEL_END__);
         free_entries_cnt = 0;
         for (int i = 0; i < sanitized_entries_cnt; i++) {
-            if (new_entries[i].type != E820_TYPE_RAM || new_entries[i].base + new_entries[i].limit < kend) continue;
+            if (new_entries[i].base + new_entries[i].limit < kend)
+                continue;
             free_entries[free_entries_cnt].base = new_entries[i].base < kend ? kend : new_entries[i].base;
+            free_entries[free_entries_cnt].type = new_entries[i].type;
             free_entries[free_entries_cnt++].limit = new_entries[i].base < kend ? new_entries[i].limit - kend + new_entries[i].base : new_entries[i].limit;
         }
         max_memory_addr = free_entries[free_entries_cnt - 1].base + free_entries[free_entries_cnt - 1].limit;
@@ -119,7 +121,8 @@ namespace arcus::memory
     void* mblock_allocate(uint64 len, int aligned) {
         for (int i = 0; i < free_entries_cnt; i++) {
             int64 alloc_base = free_entries[i].base % aligned == 0 ? free_entries[i].base : free_entries[i].base + aligned - free_entries[i].base % aligned;
-            if (alloc_base - free_entries[i].base + len > free_entries[i].limit) continue;
+            if (alloc_base - free_entries[i].base + len > free_entries[i].limit || free_entries[i].type != E820_TYPE_RAM) 
+                continue;
             free_entries[i].limit -= alloc_base - free_entries[i].base + len;
             free_entries[i].base = alloc_base + len;
             return (void*) alloc_base;
@@ -129,7 +132,7 @@ namespace arcus::memory
 
     // 分配大于开始地址的所有可用内存
     mem_range alloc_all_over_memory(uint64 start_addr, int aligned) {
-        mem_range ragne = {0, 0};
+        mem_range ragne = {0, 0, E820_TYPE_RAM};
         for (int i = 0; i < free_entries_cnt; i++) {
             uint64 alloc_base = start_addr + start_addr % aligned;
             if (free_entries[i].limit == 0 || free_entries[i].base + free_entries[i].limit <= alloc_base)
@@ -143,6 +146,7 @@ namespace arcus::memory
                 ragne.limit = free_entries[i].limit;
                 free_entries[i].limit = 0;
             }
+            ragne.mem_type = free_entries[i].type;
             return ragne;
         }
         return ragne;

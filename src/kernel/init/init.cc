@@ -5,7 +5,10 @@
 #include"mem/slab.h"
 #include"interrupt/idt.h"
 #include"interrupt/timer.h"
+#include"task/task.h"
+#include"cpu/ap.h"
 #include"printk.h"
+
 namespace arcus
 {
     // 初始化内核
@@ -21,8 +24,11 @@ namespace arcus
         memory::init_kmem_cache();
         // 初始化中断处理程序
         interrupt::init_interrupt();
+        task::init_task();
         // 初始化计时器
-        interrupt::init_timer(200);
-        printk("Welcome to Arcus!\n");
+        interrupt::init_timer(200); // 5ms一次        
+        asm __volatile__("sti");
+        // 多核CPU初始化
+        cpu::startup_ap();
     }
 }
