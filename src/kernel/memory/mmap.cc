@@ -42,7 +42,7 @@ namespace arcus::memory
 
     void init_sparse_vmemmap() {
         mem_range free_mem_range;
-        mem_range last_mem_range = {0, 0, 0};
+        mem_range last_mem_range = {0L, 0L, 0};
         // 将512MB以上所有内存加入vmalloc区域
         while ((free_mem_range = alloc_all_over_memory(0x20000000, PAGE_SIZE)).base != 0) {
             // e820列表中不包含的地址段，默认不可用
@@ -50,10 +50,14 @@ namespace arcus::memory
                 last_mem_range.base = last_mem_range.base + last_mem_range.limit;
                 last_mem_range.limit = free_mem_range.base - last_mem_range.base;
                 last_mem_range.mem_type = E820_TYPE_UNUSABLE;
-                populate_vmemmap_range(last_mem_range.base, last_mem_range.limit, last_mem_range.mem_type);
+                if (last_mem_range.base + last_mem_range.limit < MAX_SUPPORT_MEM) {
+                    populate_vmemmap_range(last_mem_range.base, last_mem_range.limit, last_mem_range.mem_type);
+                }
             }
             last_mem_range = free_mem_range;
-            populate_vmemmap_range(free_mem_range.base, free_mem_range.limit, free_mem_range.mem_type);
+            if (free_mem_range.base + free_mem_range.limit < MAX_SUPPORT_MEM) {
+                populate_vmemmap_range(free_mem_range.base, free_mem_range.limit, free_mem_range.mem_type);
+            }
         }
     }
 

@@ -1,12 +1,9 @@
 [GLOBAL get_apic_id]
 [GLOBAL start_multi_core]
 [EXTERN sleep]
-[EXTERN ttt]
 [section .text]
 [BITS 64]
 APIC_ICR_LOW equ 0xFEE00300
-APIC_SVR equ 0xFEE000F0
-AP_START_ADDR equ 0x00008000
 
 get_apic_id:
     mov rax, 0x1

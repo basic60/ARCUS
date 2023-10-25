@@ -91,6 +91,7 @@ namespace arcus::memory
             .page_count = 0,
             .ctor = ctor
         };
+        return cache;
     }
 
     static kmem_cache* choose_cache(int size) {
