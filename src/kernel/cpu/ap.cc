@@ -8,8 +8,4 @@ namespace arcus::cpu
     void startup_ap() {
         start_multi_core();   
     }
-
-    void ttt() {
-        printk("ok\n");
-    }
 }

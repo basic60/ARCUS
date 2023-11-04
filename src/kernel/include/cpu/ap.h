@@ -12,6 +12,5 @@ namespace arcus::cpu
     // 启动多核cpu
     void __init startup_ap();
 
-    extern "C" void ttt();
 }
 #endif

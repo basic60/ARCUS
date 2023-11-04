@@ -30,5 +30,6 @@ namespace arcus
         asm __volatile__("sti");
         // 多核CPU初始化
         cpu::startup_ap();
+        printk("Welcome to Arcus!");
     }
 }

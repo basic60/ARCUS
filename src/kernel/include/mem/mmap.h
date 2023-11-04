@@ -23,6 +23,7 @@ namespace arcus::memory
     #define PAGE_SHIFT 12
     #define PAGE_RW 2
     #define PAGE_PRESENT 1
+    #define MAX_SUPPORT_MEM 0x800000000L
     // 所有struct page结构映射基地址
     #define VMEME_MAP_BASE 0x100000000000
 

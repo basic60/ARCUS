@@ -217,14 +217,4 @@ long_mode_entry:
     mov fs,ax
     mov gs,ax
     mov ss,ax
-
-    call cli_clear
     jmp 0x8200
-
-cli_clear:
-    mov edi, 0xB8000
-    mov ecx, 500
-    mov eax, 0x0030       ; Set the value to set the screen to: Blue background, white foreground, blank spaces.
-    rep stosq
-    mov edi, 0xb8000         
-    ret
