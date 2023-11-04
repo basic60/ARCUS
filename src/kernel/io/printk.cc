@@ -1,6 +1,7 @@
 #include"printk.h"
 #include"va_args.h"
 #include"str.h"
+#include"cpu/spinlock.h"
 namespace arcus
 {
     #define COLOR_WHITE 0x07
@@ -10,6 +11,7 @@ namespace arcus
     static const int SCREEN_HEIGHT = 25;
 
     static int idx __attribute__((section(".data"))) = 0; // 不指明在.data段，则0会导致放入.bss段。objcopy不会复制.bss段，导致idx不确定
+    static cpu::spinlock __attribute__((section(".data"))) print_lock = {0, 0};
 
     static void scroll_text_screen() {
         for (int i = 0; i < SCREEN_HEIGHT; i++) {
@@ -113,6 +115,7 @@ namespace arcus
             return;
         }
 
+        cpu::spin_lock(&print_lock);
         bool fmt = 0;
         bool fm_long = 0;
         bool fm_unsigned = 0;
@@ -162,6 +165,7 @@ namespace arcus
             }
         }
         va_end(plist);
+        cpu::spin_unlock(&print_lock);
     }
 
 	void clear_text_screnn() {
